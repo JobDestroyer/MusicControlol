@@ -1,6 +1,7 @@
 import { callable } from "@decky/api";
-import type { PlayerInfo, PlayerStatus } from "./types";
+import type { PlayerInfo, PlayerStatus, PollSnapshot } from "./types";
 
+export const poll = callable<[], PollSnapshot>("poll");
 export const listPlayers = callable<[], PlayerInfo[]>("list_players");
 export const setPlayer = callable<[player: string], string>("set_player");
 export const getPlayer = callable<[], string>("get_player");

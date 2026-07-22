@@ -9,7 +9,7 @@ Maintained rewrite of the archived [mirobouma/MusicControl](https://github.com/m
 1. Install via Decky Loader.
 2. Start your music app **from Game Mode** so it registers on the session D-Bus.
 3. Open the Quick Access menu → **MusicControl**.
-4. If multiple players are running, use the provider button to switch.
+4. If multiple players are running, use the provider button to switch (selection is remembered).
 
 ## Supported players
 

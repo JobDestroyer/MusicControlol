@@ -41,3 +41,8 @@ export type PlayerStatus = {
   metadata: TrackMetadata;
   error: string;
 };
+
+export type PollSnapshot = {
+  players: PlayerInfo[];
+  status: PlayerStatus;
+};

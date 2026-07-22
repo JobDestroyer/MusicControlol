@@ -29,11 +29,11 @@ export const MediaProviderButton: FC<Props> = ({ currentProvider }) => {
             <MenuItem
               key={provider}
               onSelected={() => {
-                void setPlayer(provider);
                 dispatch({
-                  type: AppActions.SetCurrentServiceProvider,
+                  type: AppActions.SetActiveProvider,
                   value: provider,
                 });
+                void setPlayer(provider);
               }}
             >
               {displayName(provider)}
@@ -44,11 +44,14 @@ export const MediaProviderButton: FC<Props> = ({ currentProvider }) => {
       e.currentTarget ?? window
     );
 
+  const label =
+    currentProvider === ""
+      ? "No Media Player Found"
+      : state.currentIdentity || displayName(currentProvider);
+
   return (
     <ButtonItem layout="below" bottomSeparator="none" onClick={handleOnClick}>
-      {currentProvider === ""
-        ? "No Media Player Found"
-        : displayName(currentProvider)}
+      {label}
     </ButtonItem>
   );
 };

@@ -16,6 +16,7 @@ if (api._version != API_VERSION) {
     console.warn(`[@decky/api] Requested API version ${API_VERSION} but the running loader only supports version ${api._version}. Some features may not work.`);
 }
 const callable = api.callable;
+const useQuickAccessVisible = api.useQuickAccessVisible;
 const definePlugin = (fn) => {
     return (...args) => {
         return fn(...args);
@@ -92,10 +93,11 @@ function FaFastBackward (props) {
   return GenIcon({"attr":{"viewBox":"0 0 448 512"},"child":[{"tag":"path","attr":{"d":"M424.4 214.7L72.4 6.6C43.8-10.3 0 6.1 0 47.9V464c0 37.5 40.7 60.1 72.4 41.3l352-208c31.4-18.5 31.5-64.1 0-82.6z"},"child":[]}]})(props);
 }
 
-const listPlayers = callable("list_players");
+const poll = callable("poll");
+callable("list_players");
 const setPlayer = callable("set_player");
 callable("get_player");
-const getStatus = callable("get_status");
+callable("get_status");
 const playPause = callable("play_pause");
 const nextTrack = callable("next_track");
 const previousTrack = callable("previous_track");
@@ -107,7 +109,6 @@ var default_music = 'http://127.0.0.1:1337/plugins/MusicControl/assets/default_m
 
 const defaultState = {
     hasChangedPlaybackState: false,
-    hasChangedProvider: true,
     isSeeking: false,
     isSettingVolume: false,
     hasAvailableTrack: false,
@@ -119,71 +120,57 @@ const defaultState = {
     currentTrackLength: 1,
     currentTrackStatus: "Paused",
     currentServiceProvider: "",
+    currentIdentity: "",
     providers: [],
     providersToIdentity: [],
     currentVolume: 1.0,
     canModifyVolume: false,
     canSeek: false,
-};
-const defaultMeta = {
-    hasAvailableTrack: false,
-    hasChangedPlaybackState: false,
-    isSeeking: false,
-    isSettingVolume: false,
-    currentSong: "Not Playing",
-    currentArtist: "Unknown Artist",
-    currentArtUrl: default_music,
-    currentTrackId: "",
-    currentTrackProgress: 0,
-    currentTrackLength: 1,
-    currentTrackStatus: "Paused",
-    currentVolume: 1.0,
-    canModifyVolume: false,
-    canSeek: false,
+    emptyHint: false,
 };
 
 var AppActions;
 (function (AppActions) {
     AppActions[AppActions["SetDefaultState"] = 0] = "SetDefaultState";
-    AppActions[AppActions["SetDefaultMeta"] = 1] = "SetDefaultMeta";
-    AppActions[AppActions["SetIsSeeking"] = 2] = "SetIsSeeking";
-    AppActions[AppActions["SeekToPosition"] = 3] = "SeekToPosition";
-    AppActions[AppActions["SetIsAdjustingVolume"] = 4] = "SetIsAdjustingVolume";
-    AppActions[AppActions["AdjustVolumeByUser"] = 5] = "AdjustVolumeByUser";
-    AppActions[AppActions["SetPlayingState"] = 6] = "SetPlayingState";
-    AppActions[AppActions["SetPlayingStateByUser"] = 7] = "SetPlayingStateByUser";
-    AppActions[AppActions["SetCurrentServiceProvider"] = 8] = "SetCurrentServiceProvider";
-    AppActions[AppActions["SetTrackProgress"] = 9] = "SetTrackProgress";
-    AppActions[AppActions["SetCanModifyVolume"] = 10] = "SetCanModifyVolume";
-    AppActions[AppActions["SetMetaData"] = 11] = "SetMetaData";
-    AppActions[AppActions["SetVolume"] = 12] = "SetVolume";
-    AppActions[AppActions["SetCanSeek"] = 13] = "SetCanSeek";
-    AppActions[AppActions["SetProviders"] = 14] = "SetProviders";
-    AppActions[AppActions["SetProviderIdentities"] = 15] = "SetProviderIdentities";
-    AppActions[AppActions["SetHasChangedPlaybackState"] = 16] = "SetHasChangedPlaybackState";
+    AppActions[AppActions["SetIsSeeking"] = 1] = "SetIsSeeking";
+    AppActions[AppActions["SeekToPosition"] = 2] = "SeekToPosition";
+    AppActions[AppActions["SetIsAdjustingVolume"] = 3] = "SetIsAdjustingVolume";
+    AppActions[AppActions["AdjustVolumeByUser"] = 4] = "AdjustVolumeByUser";
+    AppActions[AppActions["SetPlayingStateByUser"] = 5] = "SetPlayingStateByUser";
+    AppActions[AppActions["SetHasChangedPlaybackState"] = 6] = "SetHasChangedPlaybackState";
+    AppActions[AppActions["SetActiveProvider"] = 7] = "SetActiveProvider";
+    AppActions[AppActions["SetSnapshot"] = 8] = "SetSnapshot";
 })(AppActions || (AppActions = {}));
 const AppStateContext = SP_REACT.createContext({
     state: defaultState,
     dispatch: () => null,
 });
+function applyMetadata(meta) {
+    return {
+        currentSong: meta.title || defaultState.currentSong,
+        currentArtist: meta.artist || defaultState.currentArtist,
+        currentArtUrl: meta.artUrl || defaultState.currentArtUrl,
+        hasAvailableTrack: Boolean(meta.title || meta.trackid || meta.artUrl),
+        currentTrackLength: meta.length && meta.length > 0 ? meta.length : defaultState.currentTrackLength,
+        currentTrackId: meta.trackid || "",
+    };
+}
 function mainReducer(state, action) {
     switch (action.type) {
         case AppActions.SetDefaultState:
-            return { ...state, ...defaultState };
-        case AppActions.SetDefaultMeta:
-            return { ...state, ...defaultMeta };
+            return {
+                ...defaultState,
+                // keep seek/volume interaction flags cleared
+                isSeeking: false,
+                isSettingVolume: false,
+                emptyHint: true,
+            };
         case AppActions.SetIsSeeking:
             return { ...state, isSeeking: action.value };
         case AppActions.SetHasChangedPlaybackState:
             return { ...state, hasChangedPlaybackState: action.value };
-        case AppActions.SetCanSeek:
-            return { ...state, canSeek: action.value };
         case AppActions.SeekToPosition:
             return { ...state, currentTrackProgress: action.value, isSeeking: true };
-        case AppActions.SetPlayingState:
-            if (state.hasChangedPlaybackState)
-                return state;
-            return { ...state, currentTrackStatus: action.value };
         case AppActions.SetPlayingStateByUser:
             return {
                 ...state,
@@ -192,47 +179,43 @@ function mainReducer(state, action) {
             };
         case AppActions.SetIsAdjustingVolume:
             return { ...state, isSettingVolume: action.value };
-        case AppActions.SetProviders:
-            return { ...state, providers: action.value };
-        case AppActions.SetProviderIdentities:
-            return { ...state, providersToIdentity: action.value };
-        case AppActions.SetTrackProgress:
-            if (state.isSeeking)
-                return state;
-            return {
-                ...state,
-                currentTrackProgress: Number.isFinite(action.value) ? action.value : 0,
-            };
-        case AppActions.SetCanModifyVolume:
-            return { ...state, canModifyVolume: action.value };
         case AppActions.AdjustVolumeByUser:
             return { ...state, currentVolume: action.value, isSettingVolume: true };
-        case AppActions.SetVolume:
-            if (state.isSettingVolume)
-                return state;
-            return { ...state, currentVolume: action.value };
-        case AppActions.SetCurrentServiceProvider: {
-            const hasChanged = state.currentServiceProvider !== action.value;
-            if (hasChanged) {
+        case AppActions.SetActiveProvider:
+            return { ...state, currentServiceProvider: action.value };
+        case AppActions.SetSnapshot: {
+            const { players, status } = action;
+            const busNames = players.map((p) => p.busName);
+            if (!players.length || !status.available) {
                 return {
-                    ...state,
-                    currentServiceProvider: action.value,
-                    hasChangedProvider: true,
+                    ...defaultState,
+                    emptyHint: true,
+                    providers: busNames,
+                    providersToIdentity: players,
                 };
             }
-            return state;
-        }
-        case AppActions.SetMetaData: {
-            const m = action.value;
-            return {
+            const meta = status.metadata || {};
+            const next = {
                 ...state,
-                currentSong: m.title || defaultState.currentSong,
-                currentArtist: m.artist || defaultState.currentArtist,
-                currentArtUrl: m.artUrl || defaultState.currentArtUrl,
-                hasAvailableTrack: Boolean(m.title || m.trackid || m.artUrl),
-                currentTrackLength: m.length && m.length > 0 ? m.length : defaultState.currentTrackLength,
-                currentTrackId: m.trackid || "",
+                emptyHint: false,
+                providers: busNames,
+                providersToIdentity: players,
+                currentServiceProvider: status.player || state.currentServiceProvider,
+                currentIdentity: status.identity || "",
+                canSeek: status.canSeek,
+                canModifyVolume: status.canControlVolume,
+                ...applyMetadata(meta),
             };
+            if (!state.hasChangedPlaybackState) {
+                next.currentTrackStatus = status.playbackStatus || state.currentTrackStatus;
+            }
+            if (!state.isSeeking) {
+                next.currentTrackProgress = status.position || 0;
+            }
+            if (!state.isSettingVolume && status.canControlVolume) {
+                next.currentVolume = status.volume;
+            }
+            return next;
         }
         default:
             return state;
@@ -336,15 +319,16 @@ const MediaProviderButton = ({ currentProvider }) => {
         return provider.replace("org.mpris.MediaPlayer2.", "");
     };
     const handleOnClick = (e) => DFL.showContextMenu(SP_JSX.jsx(DFL.Menu, { label: "Select Media Player", cancelText: "Cancel", children: state.providers.length === 0 ? (SP_JSX.jsx(DFL.MenuItem, { onSelected: () => undefined, children: "No players found" })) : (state.providers.map((provider) => (SP_JSX.jsx(DFL.MenuItem, { onSelected: () => {
-                void setPlayer(provider);
                 dispatch({
-                    type: AppActions.SetCurrentServiceProvider,
+                    type: AppActions.SetActiveProvider,
                     value: provider,
                 });
+                void setPlayer(provider);
             }, children: displayName(provider) }, provider)))) }), e.currentTarget ?? window);
-    return (SP_JSX.jsx(DFL.ButtonItem, { layout: "below", bottomSeparator: "none", onClick: handleOnClick, children: currentProvider === ""
-            ? "No Media Player Found"
-            : displayName(currentProvider) }));
+    const label = currentProvider === ""
+        ? "No Media Player Found"
+        : state.currentIdentity || displayName(currentProvider);
+    return (SP_JSX.jsx(DFL.ButtonItem, { layout: "below", bottomSeparator: "none", onClick: handleOnClick, children: label }));
 };
 
 const MusicControls = () => {
@@ -427,64 +411,34 @@ const VolumeControl = () => {
     return (SP_JSX.jsxs("div", { children: [SP_JSX.jsx("div", { style: { marginTop: "5px" }, className: DFL.staticClasses.PanelSectionTitle, children: "Playback Volume" }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(DFL.SliderField, { value: Math.round(state.currentVolume * 100), min: 0, max: 100, step: 1, onChange: onSliderChanged }) })] }));
 };
 
+function usePanelVisible() {
+    try {
+        if (typeof useQuickAccessVisible === "function") {
+            return useQuickAccessVisible();
+        }
+    }
+    catch {
+        /* older API */
+    }
+    return true;
+}
 const Content = () => {
     const { state, dispatch } = useStateContext();
+    const visible = usePanelVisible();
     const updateCallback = SP_REACT.useRef(() => undefined);
-    const stateRef = SP_REACT.useRef(state);
-    stateRef.current = state;
     const updateStatus = async () => {
-        const s = stateRef.current;
         try {
-            const players = await listPlayers();
-            const list = Array.isArray(players) ? players : [];
-            const busNames = list
-                .map((p) => (p && typeof p === "object" ? p.busName : ""))
-                .filter(Boolean);
-            dispatch({ type: AppActions.SetProviders, value: busNames });
-            dispatch({ type: AppActions.SetProviderIdentities, value: list });
-            if (busNames.length === 0) {
+            const snapshot = await poll();
+            const players = Array.isArray(snapshot?.players) ? snapshot.players : [];
+            const status = snapshot?.status;
+            if (!status) {
                 dispatch({ type: AppActions.SetDefaultState });
                 return;
             }
-            let active = s.currentServiceProvider;
-            if (!active || !busNames.includes(active)) {
-                active = busNames[0];
-                dispatch({ type: AppActions.SetCurrentServiceProvider, value: active });
-                await setPlayer(active);
-            }
-            const status = await getStatus();
-            if (!status.available) {
-                dispatch({ type: AppActions.SetDefaultMeta });
-                return;
-            }
-            if (status.player && status.player !== s.currentServiceProvider) {
-                dispatch({
-                    type: AppActions.SetCurrentServiceProvider,
-                    value: status.player,
-                });
-            }
-            if (status.metadata &&
-                (status.hasTrack || Object.keys(status.metadata).length > 0)) {
-                dispatch({ type: AppActions.SetMetaData, value: status.metadata });
-            }
-            else {
-                dispatch({ type: AppActions.SetDefaultMeta });
-            }
-            if (!s.isSeeking) {
-                dispatch({ type: AppActions.SetTrackProgress, value: status.position });
-            }
-            dispatch({ type: AppActions.SetPlayingState, value: status.playbackStatus });
-            dispatch({ type: AppActions.SetCanSeek, value: status.canSeek });
-            dispatch({
-                type: AppActions.SetCanModifyVolume,
-                value: status.canControlVolume,
-            });
-            if (status.canControlVolume && !s.isSettingVolume) {
-                dispatch({ type: AppActions.SetVolume, value: status.volume });
-            }
+            dispatch({ type: AppActions.SetSnapshot, players, status });
         }
         catch {
-            // Backend unavailable or transient D-Bus error; retry next tick
+            // transient; retry next interval
         }
     };
     SP_REACT.useEffect(() => {
@@ -493,12 +447,19 @@ const Content = () => {
         };
     });
     SP_REACT.useEffect(() => {
+        if (!visible)
+            return;
         const id = setInterval(() => updateCallback.current(), 1000);
         void updateStatus();
         return () => clearInterval(id);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-    return (SP_JSX.jsxs(DFL.PanelSection, { children: [SP_JSX.jsx("div", { className: DFL.staticClasses.PanelSectionTitle, children: "Currently Playing" }), SP_JSX.jsxs("div", { style: { display: "flex", marginBottom: "5px", alignItems: "center" }, children: [SP_JSX.jsx(AlbumArt, { albumArt: state.currentArtUrl }), SP_JSX.jsx(ArtistInfoPanel, { title: state.currentSong, artist: state.currentArtist })] }), SP_JSX.jsx(SongProgressSlider, {}), SP_JSX.jsx(MusicControls, {}), SP_JSX.jsx("div", { style: musicControlDividerStyle }), SP_JSX.jsx(VolumeControl, {}), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(MediaProviderButton, { currentProvider: state.currentServiceProvider }) })] }));
+    }, [visible]);
+    const emptyLabel = state.emptyHint
+        ? "Start a media player from Game Mode"
+        : "Not Playing";
+    return (SP_JSX.jsxs(DFL.PanelSection, { children: [SP_JSX.jsx("div", { className: DFL.staticClasses.PanelSectionTitle, children: "Currently Playing" }), SP_JSX.jsxs("div", { style: { display: "flex", marginBottom: "5px", alignItems: "center" }, children: [SP_JSX.jsx(AlbumArt, { albumArt: state.currentArtUrl }), SP_JSX.jsx(ArtistInfoPanel, { title: state.hasAvailableTrack ? state.currentSong : emptyLabel, artist: state.hasAvailableTrack
+                            ? state.currentArtist
+                            : state.currentIdentity || "" })] }), SP_JSX.jsx(SongProgressSlider, {}), SP_JSX.jsx(MusicControls, {}), SP_JSX.jsx("div", { style: musicControlDividerStyle }), SP_JSX.jsx(VolumeControl, {}), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(MediaProviderButton, { currentProvider: state.currentServiceProvider }) })] }));
 };
 
 var index = definePlugin(() => {

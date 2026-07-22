@@ -1,45 +1,33 @@
 import { createContext, useContext, useReducer, type ReactNode } from "react";
-import type { PlayerInfo, TrackMetadata } from "../types";
-import { defaultMeta, defaultState, type AppState } from "./defaultState";
+import type { PlayerInfo, PlayerStatus, TrackMetadata } from "../types";
+import { defaultState, type AppState } from "./defaultState";
 
 export enum AppActions {
   SetDefaultState,
-  SetDefaultMeta,
   SetIsSeeking,
   SeekToPosition,
   SetIsAdjustingVolume,
   AdjustVolumeByUser,
-  SetPlayingState,
   SetPlayingStateByUser,
-  SetCurrentServiceProvider,
-  SetTrackProgress,
-  SetCanModifyVolume,
-  SetMetaData,
-  SetVolume,
-  SetCanSeek,
-  SetProviders,
-  SetProviderIdentities,
   SetHasChangedPlaybackState,
+  SetActiveProvider,
+  SetSnapshot,
 }
 
 type Action =
   | { type: AppActions.SetDefaultState }
-  | { type: AppActions.SetDefaultMeta }
   | { type: AppActions.SetIsSeeking; value: boolean }
   | { type: AppActions.SeekToPosition; value: number }
-  | { type: AppActions.SetPlayingState; value: string }
-  | { type: AppActions.SetPlayingStateByUser; value: string }
   | { type: AppActions.SetIsAdjustingVolume; value: boolean }
   | { type: AppActions.AdjustVolumeByUser; value: number }
-  | { type: AppActions.SetVolume; value: number }
+  | { type: AppActions.SetPlayingStateByUser; value: string }
   | { type: AppActions.SetHasChangedPlaybackState; value: boolean }
-  | { type: AppActions.SetTrackProgress; value: number }
-  | { type: AppActions.SetCanModifyVolume; value: boolean }
-  | { type: AppActions.SetCanSeek; value: boolean }
-  | { type: AppActions.SetProviders; value: string[] }
-  | { type: AppActions.SetProviderIdentities; value: PlayerInfo[] }
-  | { type: AppActions.SetCurrentServiceProvider; value: string }
-  | { type: AppActions.SetMetaData; value: TrackMetadata };
+  | { type: AppActions.SetActiveProvider; value: string }
+  | {
+      type: AppActions.SetSnapshot;
+      players: PlayerInfo[];
+      status: PlayerStatus;
+    };
 
 type Dispatch = (action: Action) => void;
 
@@ -51,23 +39,34 @@ const AppStateContext = createContext<{
   dispatch: () => null,
 });
 
+function applyMetadata(meta: TrackMetadata): Partial<AppState> {
+  return {
+    currentSong: meta.title || defaultState.currentSong,
+    currentArtist: meta.artist || defaultState.currentArtist,
+    currentArtUrl: meta.artUrl || defaultState.currentArtUrl,
+    hasAvailableTrack: Boolean(meta.title || meta.trackid || meta.artUrl),
+    currentTrackLength:
+      meta.length && meta.length > 0 ? meta.length : defaultState.currentTrackLength,
+    currentTrackId: meta.trackid || "",
+  };
+}
+
 function mainReducer(state: AppState, action: Action): AppState {
   switch (action.type) {
     case AppActions.SetDefaultState:
-      return { ...state, ...defaultState };
-    case AppActions.SetDefaultMeta:
-      return { ...state, ...defaultMeta };
+      return {
+        ...defaultState,
+        // keep seek/volume interaction flags cleared
+        isSeeking: false,
+        isSettingVolume: false,
+        emptyHint: true,
+      };
     case AppActions.SetIsSeeking:
       return { ...state, isSeeking: action.value };
     case AppActions.SetHasChangedPlaybackState:
       return { ...state, hasChangedPlaybackState: action.value };
-    case AppActions.SetCanSeek:
-      return { ...state, canSeek: action.value };
     case AppActions.SeekToPosition:
       return { ...state, currentTrackProgress: action.value, isSeeking: true };
-    case AppActions.SetPlayingState:
-      if (state.hasChangedPlaybackState) return state;
-      return { ...state, currentTrackStatus: action.value };
     case AppActions.SetPlayingStateByUser:
       return {
         ...state,
@@ -76,45 +75,47 @@ function mainReducer(state: AppState, action: Action): AppState {
       };
     case AppActions.SetIsAdjustingVolume:
       return { ...state, isSettingVolume: action.value };
-    case AppActions.SetProviders:
-      return { ...state, providers: action.value };
-    case AppActions.SetProviderIdentities:
-      return { ...state, providersToIdentity: action.value };
-    case AppActions.SetTrackProgress:
-      if (state.isSeeking) return state;
-      return {
-        ...state,
-        currentTrackProgress: Number.isFinite(action.value) ? action.value : 0,
-      };
-    case AppActions.SetCanModifyVolume:
-      return { ...state, canModifyVolume: action.value };
     case AppActions.AdjustVolumeByUser:
       return { ...state, currentVolume: action.value, isSettingVolume: true };
-    case AppActions.SetVolume:
-      if (state.isSettingVolume) return state;
-      return { ...state, currentVolume: action.value };
-    case AppActions.SetCurrentServiceProvider: {
-      const hasChanged = state.currentServiceProvider !== action.value;
-      if (hasChanged) {
+    case AppActions.SetActiveProvider:
+      return { ...state, currentServiceProvider: action.value };
+    case AppActions.SetSnapshot: {
+      const { players, status } = action;
+      const busNames = players.map((p) => p.busName);
+
+      if (!players.length || !status.available) {
         return {
-          ...state,
-          currentServiceProvider: action.value,
-          hasChangedProvider: true,
+          ...defaultState,
+          emptyHint: true,
+          providers: busNames,
+          providersToIdentity: players,
         };
       }
-      return state;
-    }
-    case AppActions.SetMetaData: {
-      const m = action.value;
-      return {
+
+      const meta = status.metadata || {};
+      const next: AppState = {
         ...state,
-        currentSong: m.title || defaultState.currentSong,
-        currentArtist: m.artist || defaultState.currentArtist,
-        currentArtUrl: m.artUrl || defaultState.currentArtUrl,
-        hasAvailableTrack: Boolean(m.title || m.trackid || m.artUrl),
-        currentTrackLength: m.length && m.length > 0 ? m.length : defaultState.currentTrackLength,
-        currentTrackId: m.trackid || "",
+        emptyHint: false,
+        providers: busNames,
+        providersToIdentity: players,
+        currentServiceProvider: status.player || state.currentServiceProvider,
+        currentIdentity: status.identity || "",
+        canSeek: status.canSeek,
+        canModifyVolume: status.canControlVolume,
+        ...applyMetadata(meta),
       };
+
+      if (!state.hasChangedPlaybackState) {
+        next.currentTrackStatus = status.playbackStatus || state.currentTrackStatus;
+      }
+      if (!state.isSeeking) {
+        next.currentTrackProgress = status.position || 0;
+      }
+      if (!state.isSettingVolume && status.canControlVolume) {
+        next.currentVolume = status.volume;
+      }
+
+      return next;
     }
     default:
       return state;

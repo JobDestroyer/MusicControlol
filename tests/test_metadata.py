@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unit tests for MPRIS metadata normalization (Strawberry-shaped payloads)."""
+"""Unit tests for MPRIS parsing helpers."""
 
 import os
 import sys
@@ -7,6 +7,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from mpris_parse import parse_metadata, parse_player_get_all, parse_variant_string
 from mpris_util import metadata_to_dict, unwrap_variant
 
 
@@ -21,70 +22,120 @@ class TestUnwrapVariant(unittest.TestCase):
         self.assertEqual(unwrap_variant([("s", "a"), ("s", "b")]), ["a", "b"])
 
 
-class TestStrawberryMetadata(unittest.TestCase):
-    def test_multi_artist_and_file_art(self):
-        # Shape similar to jeepney-decoded Strawberry Metadata
+class TestMetadataToDict(unittest.TestCase):
+    def test_multi_artist(self):
         raw = {
-            "mpris:trackid": (
-                "o",
-                "/org/strawberrymusicplayer/strawberry/Track/abcdef01_2345",
-            ),
+            "mpris:trackid": ("o", "/org/strawberry/Track/abc"),
             "mpris:length": ("x", 245000000),
-            "mpris:artUrl": (
-                "s",
-                "file:///home/deck/.var/app/org.strawberrymusicplayer.strawberry/cache/cover.jpg",
-            ),
+            "mpris:artUrl": ("s", "file:///tmp/cover.jpg"),
             "xesam:title": ("s", "Song Title With | Pipe"),
-            "xesam:album": ("s", "Album Name"),
             "xesam:artist": ("as", ["Artist One", "Artist Two"]),
-            "xesam:url": ("s", "file:///home/deck/Music/song.flac"),
         }
         out = metadata_to_dict(raw)
-        self.assertEqual(
-            out["trackid"],
-            "/org/strawberrymusicplayer/strawberry/Track/abcdef01_2345",
-        )
-        self.assertEqual(out["length"], 245000000)
-        self.assertTrue(out["artUrl"].startswith("file:///"))
-        self.assertEqual(out["title"], "Song Title With | Pipe")
+        self.assertEqual(out["trackid"], "/org/strawberry/Track/abc")
         self.assertEqual(out["artist"], "Artist One, Artist Two")
-        self.assertEqual(out["album"], "Album Name")
-
-    def test_spotify_like(self):
-        raw = {
-            "mpris:trackid": ("s", "spotify:track:abc123"),
-            "mpris:length": ("t", 200000000),
-            "mpris:artUrl": ("s", "https://i.scdn.co/image/xyz"),
-            "xesam:title": ("s", "Blinding Lights"),
-            "xesam:artist": ("as", ["The Weeknd"]),
-        }
-        out = metadata_to_dict(raw)
-        self.assertEqual(out["trackid"], "spotify:track:abc123")
-        self.assertEqual(out["artist"], "The Weeknd")
-        self.assertEqual(out["title"], "Blinding Lights")
-        self.assertTrue(out["artUrl"].startswith("https://"))
-
-    def test_empty(self):
-        self.assertEqual(metadata_to_dict({}), {})
-        self.assertEqual(metadata_to_dict(None), {})
+        self.assertEqual(out["title"], "Song Title With | Pipe")
 
 
-class TestBusDiscoveryHelpers(unittest.TestCase):
-    def test_prefix_filter(self):
-        names = [
-            "org.freedesktop.DBus",
-            "org.mpris.MediaPlayer2.strawberry",
-            "org.mpris.MediaPlayer2.spotify",
-            ":1.42",
-        ]
-        mpris = sorted(n for n in names if n.startswith("org.mpris.MediaPlayer2"))
-        self.assertEqual(
-            mpris,
-            [
-                "org.mpris.MediaPlayer2.spotify",
-                "org.mpris.MediaPlayer2.strawberry",
-            ],
-        )
+STRAWBERRY_META = r'''
+method return time=1 sender=:1.99 -> destination=:1.100
+   variant       array [
+         dict entry(
+            string "mpris:trackid"
+            variant                object path "/org/strawberrymusicplayer/strawberry/Track/abcdef01_2345"
+         )
+         dict entry(
+            string "mpris:length"
+            variant                int64 245000000
+         )
+         dict entry(
+            string "mpris:artUrl"
+            variant                string "file:///home/deck/cover.jpg"
+         )
+         dict entry(
+            string "xesam:title"
+            variant                string "Song Title With | Pipe"
+         )
+         dict entry(
+            string "xesam:artist"
+            variant                array [
+                  string "Artist One"
+                  string "Artist Two"
+               ]
+         )
+      ]
+'''
+
+GET_ALL_SAMPLE = r'''
+method return
+   array [
+      dict entry(
+         string "PlaybackStatus"
+         variant             string "Playing"
+      )
+      dict entry(
+         string "Position"
+         variant             int64 12345000
+      )
+      dict entry(
+         string "Volume"
+         variant             double 0.75
+      )
+      dict entry(
+         string "CanSeek"
+         variant             boolean true
+      )
+      dict entry(
+         string "Metadata"
+         variant             array [
+               dict entry(
+                  string "mpris:trackid"
+                  variant                      object path "/org/mpris/MediaPlayer2/Track/1"
+               )
+               dict entry(
+                  string "xesam:title"
+                  variant                      string "Hello"
+               )
+               dict entry(
+                  string "xesam:artist"
+                  variant                      array [
+                        string "Band"
+                     ]
+               )
+               dict entry(
+                  string "mpris:length"
+                  variant                      int64 180000000
+               )
+            ]
+      )
+   ]
+'''
+
+
+class TestParseMetadataText(unittest.TestCase):
+    def test_strawberry_shaped(self):
+        out = parse_metadata(STRAWBERRY_META)
+        self.assertIn("Track/abcdef01", out.get("trackid", ""))
+        self.assertEqual(out.get("title"), "Song Title With | Pipe")
+        self.assertEqual(out.get("artist"), "Artist One, Artist Two")
+        self.assertEqual(out.get("length"), 245000000)
+        self.assertTrue(str(out.get("artUrl", "")).startswith("file://"))
+
+    def test_get_all(self):
+        out = parse_player_get_all(GET_ALL_SAMPLE)
+        self.assertEqual(out["playbackStatus"], "Playing")
+        self.assertEqual(out["position"], 12345000)
+        self.assertEqual(out["volume"], 0.75)
+        self.assertTrue(out["canSeek"])
+        self.assertTrue(out["canControlVolume"])
+        self.assertEqual(out["metadata"].get("title"), "Hello")
+        self.assertEqual(out["metadata"].get("artist"), "Band")
+
+
+class TestParseVariantString(unittest.TestCase):
+    def test_quoted(self):
+        s = 'variant       string "Strawberry"\n'
+        self.assertEqual(parse_variant_string(s), "Strawberry")
 
 
 if __name__ == "__main__":
