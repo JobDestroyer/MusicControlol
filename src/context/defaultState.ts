@@ -20,7 +20,6 @@ export const defaultState = {
   currentVolume: 1.0,
   canModifyVolume: false,
   canSeek: false,
-  lastError: "",
 };
 
 export const defaultMeta = {

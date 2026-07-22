@@ -92,43 +92,16 @@ function FaFastBackward (props) {
   return GenIcon({"attr":{"viewBox":"0 0 448 512"},"child":[{"tag":"path","attr":{"d":"M424.4 214.7L72.4 6.6C43.8-10.3 0 6.1 0 47.9V464c0 37.5 40.7 60.1 72.4 41.3l352-208c31.4-18.5 31.5-64.1 0-82.6z"},"child":[]}]})(props);
 }
 
-const listPlayersRaw = callable("list_players");
-const setPlayerRaw = callable("set_player");
+const listPlayers = callable("list_players");
+const setPlayer = callable("set_player");
 callable("get_player");
-const getStatusRaw = callable("get_status");
-const playPauseRaw = callable("play_pause");
-const nextTrackRaw = callable("next_track");
-const previousTrackRaw = callable("previous_track");
-const setPositionRaw = callable("set_position");
-const setVolumeRaw = callable("set_volume");
-const cacheAlbumArtRaw = callable("cache_album_art");
-const debugInfoRaw = callable("debug_info");
-const pingRaw = callable("ping");
-function withTimeout(p, ms, label) {
-    return new Promise((resolve, reject) => {
-        const t = window.setTimeout(() => {
-            reject(new Error(`${label} timed out after ${ms}ms (backend hung or not loaded)`));
-        }, ms);
-        p.then((v) => {
-            window.clearTimeout(t);
-            resolve(v);
-        }, (e) => {
-            window.clearTimeout(t);
-            reject(e);
-        });
-    });
-}
-const ping = () => withTimeout(pingRaw(), 3000, "ping");
-const listPlayers = () => withTimeout(listPlayersRaw(), 8000, "list_players");
-const setPlayer = (player) => withTimeout(setPlayerRaw(player), 3000, "set_player");
-const getStatus = () => withTimeout(getStatusRaw(), 8000, "get_status");
-const playPause = () => withTimeout(playPauseRaw(), 3000, "play_pause");
-const nextTrack = () => withTimeout(nextTrackRaw(), 3000, "next_track");
-const previousTrack = () => withTimeout(previousTrackRaw(), 3000, "previous_track");
-const setPosition = (position, trackId) => withTimeout(setPositionRaw(position, trackId), 3000, "set_position");
-const setVolume = (volume) => withTimeout(setVolumeRaw(volume), 3000, "set_volume");
-const cacheAlbumArt = (artUrl) => withTimeout(cacheAlbumArtRaw(artUrl), 5000, "cache_album_art");
-const debugInfo = () => withTimeout(debugInfoRaw(), 8000, "debug_info");
+const getStatus = callable("get_status");
+const playPause = callable("play_pause");
+const nextTrack = callable("next_track");
+const previousTrack = callable("previous_track");
+const setPosition = callable("set_position");
+const setVolume = callable("set_volume");
+const cacheAlbumArt = callable("cache_album_art");
 
 var default_music = 'http://127.0.0.1:1337/plugins/MusicControl/assets/default_music-de70c8a5.png';
 
@@ -151,7 +124,6 @@ const defaultState = {
     currentVolume: 1.0,
     canModifyVolume: false,
     canSeek: false,
-    lastError: "",
 };
 const defaultMeta = {
     hasAvailableTrack: false,
@@ -189,7 +161,6 @@ var AppActions;
     AppActions[AppActions["SetProviders"] = 14] = "SetProviders";
     AppActions[AppActions["SetProviderIdentities"] = 15] = "SetProviderIdentities";
     AppActions[AppActions["SetHasChangedPlaybackState"] = 16] = "SetHasChangedPlaybackState";
-    AppActions[AppActions["SetLastError"] = 17] = "SetLastError";
 })(AppActions || (AppActions = {}));
 const AppStateContext = SP_REACT.createContext({
     state: defaultState,
@@ -263,8 +234,6 @@ function mainReducer(state, action) {
                 currentTrackId: m.trackid || "",
             };
         }
-        case AppActions.SetLastError:
-            return { ...state, lastError: action.value };
         default:
             return state;
     }
@@ -373,12 +342,9 @@ const MediaProviderButton = ({ currentProvider }) => {
                     value: provider,
                 });
             }, children: displayName(provider) }, provider)))) }), e.currentTarget ?? window);
-    const label = currentProvider === ""
-        ? state.providers.length === 0
-            ? "No Media Player Found (tap for info)"
-            : "Select media player…"
-        : displayName(currentProvider);
-    return (SP_JSX.jsx(DFL.ButtonItem, { layout: "below", bottomSeparator: "none", onClick: handleOnClick, children: label }));
+    return (SP_JSX.jsx(DFL.ButtonItem, { layout: "below", bottomSeparator: "none", onClick: handleOnClick, children: currentProvider === ""
+            ? "No Media Player Found"
+            : displayName(currentProvider) }));
 };
 
 const MusicControls = () => {
@@ -464,32 +430,12 @@ const VolumeControl = () => {
 const Content = () => {
     const { state, dispatch } = useStateContext();
     const updateCallback = SP_REACT.useRef(() => undefined);
-    // Keep latest state for the interval without resetting the timer
     const stateRef = SP_REACT.useRef(state);
     stateRef.current = state;
     const updateStatus = async () => {
         const s = stateRef.current;
         try {
-            // Fast liveness check — if this fails, backend isn't loaded
-            try {
-                const pong = await ping();
-                if (!pong?.ok) {
-                    dispatch({
-                        type: AppActions.SetLastError,
-                        value: "Backend ping returned not-ok. Reload plugins.",
-                    });
-                    return;
-                }
-            }
-            catch (e) {
-                dispatch({
-                    type: AppActions.SetLastError,
-                    value: `Backend not responding: ${e instanceof Error ? e.message : String(e)}. Reinstall from GitHub release v2.0.3 and Decky → Reload plugins. Check ~/homebrew/logs/MusicControl/`,
-                });
-                return;
-            }
             const players = await listPlayers();
-            // Defend against unexpected backend/bridge shapes
             const list = Array.isArray(players) ? players : [];
             const busNames = list
                 .map((p) => (p && typeof p === "object" ? p.busName : ""))
@@ -498,24 +444,6 @@ const Content = () => {
             dispatch({ type: AppActions.SetProviderIdentities, value: list });
             if (busNames.length === 0) {
                 dispatch({ type: AppActions.SetDefaultState });
-                let detail = "No MPRIS players found. Start Strawberry from Game Mode with a track playing.";
-                try {
-                    const dbg = await debugInfo();
-                    const bits = [
-                        `v${dbg.version || "2.0.3"}`,
-                        dbg.note || "(no discovery note)",
-                        dbg.busAddress ? `bus=${dbg.busAddress}` : "bus=(none)",
-                        `uid=${dbg.uid}`,
-                        dbg.dbusSend ? "dbus-send=ok" : "dbus-send=MISSING",
-                        dbg.players?.length ? `raw=${dbg.players.join(",")}` : "",
-                        dbg.error,
-                    ].filter(Boolean);
-                    detail = bits.join(" · ");
-                }
-                catch (e) {
-                    detail = `Backend debug_info failed: ${e instanceof Error ? e.message : String(e)}`;
-                }
-                dispatch({ type: AppActions.SetLastError, value: detail });
                 return;
             }
             let active = s.currentServiceProvider;
@@ -525,12 +453,6 @@ const Content = () => {
                 await setPlayer(active);
             }
             const status = await getStatus();
-            if (status.error) {
-                dispatch({ type: AppActions.SetLastError, value: status.error });
-            }
-            else {
-                dispatch({ type: AppActions.SetLastError, value: "" });
-            }
             if (!status.available) {
                 dispatch({ type: AppActions.SetDefaultMeta });
                 return;
@@ -541,7 +463,8 @@ const Content = () => {
                     value: status.player,
                 });
             }
-            if (status.metadata && (status.hasTrack || Object.keys(status.metadata).length > 0)) {
+            if (status.metadata &&
+                (status.hasTrack || Object.keys(status.metadata).length > 0)) {
                 dispatch({ type: AppActions.SetMetaData, value: status.metadata });
             }
             else {
@@ -560,11 +483,8 @@ const Content = () => {
                 dispatch({ type: AppActions.SetVolume, value: status.volume });
             }
         }
-        catch (e) {
-            dispatch({
-                type: AppActions.SetLastError,
-                value: `listPlayers/getStatus failed: ${e instanceof Error ? e.message : String(e)}. If this persists, you may still be running store MusicControl 1.1.x — install the fork into ~/homebrew/plugins/MusicControl.`,
-            });
+        catch {
+            // Backend unavailable or transient D-Bus error; retry next tick
         }
     };
     SP_REACT.useEffect(() => {
@@ -578,17 +498,7 @@ const Content = () => {
         return () => clearInterval(id);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
-    return (SP_JSX.jsxs(DFL.PanelSection, { children: [SP_JSX.jsx("div", { className: DFL.staticClasses.PanelSectionTitle, children: "Currently Playing" }), SP_JSX.jsxs("div", { style: { display: "flex", marginBottom: "5px", alignItems: "center" }, children: [SP_JSX.jsx(AlbumArt, { albumArt: state.currentArtUrl }), SP_JSX.jsx(ArtistInfoPanel, { title: state.currentSong, artist: state.currentArtist })] }), SP_JSX.jsx(SongProgressSlider, {}), SP_JSX.jsx(MusicControls, {}), SP_JSX.jsx("div", { style: musicControlDividerStyle }), SP_JSX.jsx(VolumeControl, {}), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(MediaProviderButton, { currentProvider: state.currentServiceProvider }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: {
-                        fontSize: "0.75em",
-                        opacity: 0.85,
-                        marginTop: "6px",
-                        wordBreak: "break-word",
-                        whiteSpace: "pre-wrap",
-                    }, children: state.lastError
-                        ? state.lastError
-                        : state.currentServiceProvider
-                            ? `Controlling: ${state.currentServiceProvider}`
-                            : "Status: waiting for backend…" }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: { fontSize: "0.7em", opacity: 0.55, marginTop: "4px" }, children: "MusicControl fork v2.0.3 (JobDestroyer/MusicControlol). If status stays on \u201Cwaiting for backend\u201D, the Python side did not load \u2014 reinstall the release zip and Reload plugins." }) })] }));
+    return (SP_JSX.jsxs(DFL.PanelSection, { children: [SP_JSX.jsx("div", { className: DFL.staticClasses.PanelSectionTitle, children: "Currently Playing" }), SP_JSX.jsxs("div", { style: { display: "flex", marginBottom: "5px", alignItems: "center" }, children: [SP_JSX.jsx(AlbumArt, { albumArt: state.currentArtUrl }), SP_JSX.jsx(ArtistInfoPanel, { title: state.currentSong, artist: state.currentArtist })] }), SP_JSX.jsx(SongProgressSlider, {}), SP_JSX.jsx(MusicControls, {}), SP_JSX.jsx("div", { style: musicControlDividerStyle }), SP_JSX.jsx(VolumeControl, {}), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(MediaProviderButton, { currentProvider: state.currentServiceProvider }) })] }));
 };
 
 var index = definePlugin(() => {

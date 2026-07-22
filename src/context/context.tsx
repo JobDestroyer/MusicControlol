@@ -20,7 +20,6 @@ export enum AppActions {
   SetProviders,
   SetProviderIdentities,
   SetHasChangedPlaybackState,
-  SetLastError,
 }
 
 type Action =
@@ -40,8 +39,7 @@ type Action =
   | { type: AppActions.SetProviders; value: string[] }
   | { type: AppActions.SetProviderIdentities; value: PlayerInfo[] }
   | { type: AppActions.SetCurrentServiceProvider; value: string }
-  | { type: AppActions.SetMetaData; value: TrackMetadata }
-  | { type: AppActions.SetLastError; value: string };
+  | { type: AppActions.SetMetaData; value: TrackMetadata };
 
 type Dispatch = (action: Action) => void;
 
@@ -118,8 +116,6 @@ function mainReducer(state: AppState, action: Action): AppState {
         currentTrackId: m.trackid || "",
       };
     }
-    case AppActions.SetLastError:
-      return { ...state, lastError: action.value };
     default:
       return state;
   }

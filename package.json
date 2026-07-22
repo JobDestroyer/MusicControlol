@@ -1,7 +1,7 @@
 {
   "name": "music-control",
-  "version": "2.0.3",
-  "description": "Control MPRIS media players (Strawberry, Spotify, Firefox) from Steam Deck Game Mode via Decky.",
+  "version": "2.1.0",
+  "description": "Control MPRIS media players from Steam Deck Game Mode via Decky.",
   "type": "module",
   "scripts": {
     "build": "rollup -c",
@@ -10,7 +10,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mirobouma/MusicControl.git"
+    "url": "git+https://github.com/JobDestroyer/MusicControlol.git"
   },
   "keywords": [
     "decky",
@@ -20,12 +20,12 @@
     "strawberry",
     "steam-deck"
   ],
-  "author": "MusicControl maintainers",
+  "author": "JobDestroyer",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/mirobouma/MusicControl/issues"
+    "url": "https://github.com/JobDestroyer/MusicControlol/issues"
   },
-  "homepage": "https://github.com/mirobouma/MusicControl#readme",
+  "homepage": "https://github.com/JobDestroyer/MusicControlol#readme",
   "devDependencies": {
     "@decky/rollup": "^1.0.2",
     "@decky/ui": "^4.11.0",

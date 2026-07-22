@@ -1,11 +1,11 @@
 {
   "name": "MusicControl",
-  "author": "MusicControl maintainers (fork of mirobouma/MusicControl)",
+  "author": "JobDestroyer",
   "flags": [],
   "api_version": 1,
   "publish": {
     "tags": ["music", "media", "mpris", "strawberry", "spotify"],
-    "description": "Control MPRIS media players (Strawberry, Spotify, Firefox, etc.) from Game Mode. Maintained fork with a real D-Bus backend.",
-    "image": "https://raw.githubusercontent.com/mirobouma/MusicControl/main/assets/screenshot.png"
+    "description": "Control MPRIS media players (Strawberry, Spotify, Firefox, etc.) from Game Mode.",
+    "image": "https://raw.githubusercontent.com/JobDestroyer/MusicControlol/main/assets/screenshot.png"
   }
 }
