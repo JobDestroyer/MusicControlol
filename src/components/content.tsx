@@ -1,6 +1,6 @@
 import { PanelSection, PanelSectionRow, staticClasses } from "@decky/ui";
 import { useEffect, useRef, type FC } from "react";
-import { getStatus, listPlayers, setPlayer } from "../backend";
+import { debugInfo, getStatus, listPlayers, setPlayer } from "../backend";
 import { AppActions, useStateContext } from "../context/context";
 import { musicControlDividerStyle } from "../styles/style";
 import { AlbumArt } from "./albumArt";
@@ -27,10 +27,21 @@ export const Content: FC = () => {
 
       if (busNames.length === 0) {
         dispatch({ type: AppActions.SetDefaultState });
-        dispatch({
-          type: AppActions.SetLastError,
-          value: "No MPRIS players on the session bus. Start the app from Game Mode.",
-        });
+        let detail =
+          "No MPRIS players found. Start Strawberry from Game Mode and wait until music is playing.";
+        try {
+          const dbg = await debugInfo();
+          const bits = [
+            dbg.note,
+            dbg.busAddress ? `bus=${dbg.busAddress}` : "",
+            dbg.dbusSend ? "" : "dbus-send missing",
+            dbg.error,
+          ].filter(Boolean);
+          if (bits.length) detail = bits.join(" · ");
+        } catch {
+          /* keep default */
+        }
+        dispatch({ type: AppActions.SetLastError, value: detail });
         return;
       }
 

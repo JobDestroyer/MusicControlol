@@ -1,6 +1,17 @@
 import { callable } from "@decky/api";
 import type { PlayerInfo, PlayerStatus } from "./types";
 
+export type DebugInfo = {
+  uid: number;
+  deckyUser: string;
+  busAddress: string;
+  candidates: string[];
+  players: string[];
+  note: string;
+  error: string;
+  dbusSend: string;
+};
+
 export const listPlayers = callable<[], PlayerInfo[]>("list_players");
 export const setPlayer = callable<[player: string], string>("set_player");
 export const getPlayer = callable<[], string>("get_player");
@@ -16,3 +27,4 @@ export const setVolume = callable<[volume: number], boolean>("set_volume");
 export const cacheAlbumArt = callable<[artUrl: string], string>(
   "cache_album_art"
 );
+export const debugInfo = callable<[], DebugInfo>("debug_info");

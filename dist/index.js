@@ -102,6 +102,7 @@ const previousTrack = callable("previous_track");
 const setPosition = callable("set_position");
 const setVolume = callable("set_volume");
 const cacheAlbumArt = callable("cache_album_art");
+const debugInfo = callable("debug_info");
 
 var default_music = 'http://127.0.0.1:1337/plugins/MusicControl/assets/default_music-de70c8a5.png';
 
@@ -446,10 +447,22 @@ const Content = () => {
             dispatch({ type: AppActions.SetProviderIdentities, value: players });
             if (busNames.length === 0) {
                 dispatch({ type: AppActions.SetDefaultState });
-                dispatch({
-                    type: AppActions.SetLastError,
-                    value: "No MPRIS players on the session bus. Start the app from Game Mode.",
-                });
+                let detail = "No MPRIS players found. Start Strawberry from Game Mode and wait until music is playing.";
+                try {
+                    const dbg = await debugInfo();
+                    const bits = [
+                        dbg.note,
+                        dbg.busAddress ? `bus=${dbg.busAddress}` : "",
+                        dbg.dbusSend ? "" : "dbus-send missing",
+                        dbg.error,
+                    ].filter(Boolean);
+                    if (bits.length)
+                        detail = bits.join(" · ");
+                }
+                catch {
+                    /* keep default */
+                }
+                dispatch({ type: AppActions.SetLastError, value: detail });
                 return;
             }
             let active = s.currentServiceProvider;
