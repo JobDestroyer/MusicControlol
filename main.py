@@ -20,13 +20,21 @@ from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import unquote, urlparse
 
 _plugin_dir = os.path.dirname(os.path.abspath(__file__))
+# Decky loads main.py by path; the plugin folder is NOT on sys.path by default.
+if _plugin_dir not in sys.path:
+    sys.path.insert(0, _plugin_dir)
 _py_modules = os.path.join(_plugin_dir, "py_modules")
 if _py_modules not in sys.path:
     sys.path.insert(0, _py_modules)
 
 import decky  # type: ignore
 
-from mpris_util import metadata_to_dict
+try:
+    from mpris_util import metadata_to_dict
+except Exception:
+    # Last resort: keep backend alive even if helper module is missing
+    def metadata_to_dict(raw):  # type: ignore
+        return raw if isinstance(raw, dict) else {}
 
 MPRIS_PREFIX = "org.mpris.MediaPlayer2"
 MPRIS_PATH = "/org/mpris/MediaPlayer2"
@@ -365,7 +373,7 @@ class Plugin:
     async def ping(self) -> Dict[str, Any]:
         return {
             "ok": True,
-            "version": "2.0.2",
+            "version": "2.0.3",
             "uid": os.getuid(),
             "deckUid": _deck_uid(),
             "bus": self.bus_address or os.environ.get("DBUS_SESSION_BUS_ADDRESS", ""),
@@ -393,7 +401,7 @@ class Plugin:
             "note": note,
             "error": self.last_error,
             "dbusSend": shutil.which("dbus-send") or "",
-            "version": "2.0.2",
+            "version": "2.0.3",
             "jeepney": _HAS_JEEPNEY,
         }
 
@@ -446,7 +454,7 @@ class Plugin:
             "error": self.last_error or self.last_note or "",
             "busAddress": self.bus_address,
             "discoveryNote": self.last_note,
-            "version": "2.0.2",
+            "version": "2.0.3",
         }
         try:
             if not self.bus_address:
@@ -546,7 +554,7 @@ class Plugin:
                 "error": "",
                 "busAddress": bus,
                 "discoveryNote": self.last_note,
-                "version": "2.0.2",
+                "version": "2.0.3",
             }
         except Exception as e:
             self.last_error = str(e)

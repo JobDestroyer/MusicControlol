@@ -1,6 +1,6 @@
 {
   "name": "music-control",
-  "version": "2.0.2",
+  "version": "2.0.3",
   "description": "Control MPRIS media players (Strawberry, Spotify, Firefox) from Steam Deck Game Mode via Decky.",
   "type": "module",
   "scripts": {

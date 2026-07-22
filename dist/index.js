@@ -484,7 +484,7 @@ const Content = () => {
             catch (e) {
                 dispatch({
                     type: AppActions.SetLastError,
-                    value: `Backend not responding: ${e instanceof Error ? e.message : String(e)}. Reinstall from GitHub release v2.0.2 and Decky → Reload plugins. Check ~/homebrew/logs/MusicControl/`,
+                    value: `Backend not responding: ${e instanceof Error ? e.message : String(e)}. Reinstall from GitHub release v2.0.3 and Decky → Reload plugins. Check ~/homebrew/logs/MusicControl/`,
                 });
                 return;
             }
@@ -502,7 +502,7 @@ const Content = () => {
                 try {
                     const dbg = await debugInfo();
                     const bits = [
-                        `v${dbg.version || "2.0.2"}`,
+                        `v${dbg.version || "2.0.3"}`,
                         dbg.note || "(no discovery note)",
                         dbg.busAddress ? `bus=${dbg.busAddress}` : "bus=(none)",
                         `uid=${dbg.uid}`,
@@ -588,7 +588,7 @@ const Content = () => {
                         ? state.lastError
                         : state.currentServiceProvider
                             ? `Controlling: ${state.currentServiceProvider}`
-                            : "Status: waiting for backend…" }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: { fontSize: "0.7em", opacity: 0.55, marginTop: "4px" }, children: "MusicControl fork v2.0.2 (JobDestroyer/MusicControlol). If status stays on \u201Cwaiting for backend\u201D, the Python side did not load \u2014 reinstall the release zip and Reload plugins." }) })] }));
+                            : "Status: waiting for backend…" }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: { fontSize: "0.7em", opacity: 0.55, marginTop: "4px" }, children: "MusicControl fork v2.0.3 (JobDestroyer/MusicControlol). If status stays on \u201Cwaiting for backend\u201D, the Python side did not load \u2014 reinstall the release zip and Reload plugins." }) })] }));
 };
 
 var index = definePlugin(() => {

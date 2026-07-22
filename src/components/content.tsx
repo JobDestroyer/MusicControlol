@@ -41,7 +41,7 @@ export const Content: FC = () => {
           type: AppActions.SetLastError,
           value: `Backend not responding: ${
             e instanceof Error ? e.message : String(e)
-          }. Reinstall from GitHub release v2.0.2 and Decky → Reload plugins. Check ~/homebrew/logs/MusicControl/`,
+          }. Reinstall from GitHub release v2.0.3 and Decky → Reload plugins. Check ~/homebrew/logs/MusicControl/`,
         });
         return;
       }
@@ -62,7 +62,7 @@ export const Content: FC = () => {
         try {
           const dbg = await debugInfo();
           const bits = [
-            `v${dbg.version || "2.0.2"}`,
+            `v${dbg.version || "2.0.3"}`,
             dbg.note || "(no discovery note)",
             dbg.busAddress ? `bus=${dbg.busAddress}` : "bus=(none)",
             `uid=${dbg.uid}`,
@@ -182,7 +182,7 @@ export const Content: FC = () => {
       </PanelSectionRow>
       <PanelSectionRow>
         <div style={{ fontSize: "0.7em", opacity: 0.55, marginTop: "4px" }}>
-          MusicControl fork v2.0.2 (JobDestroyer/MusicControlol). If status stays
+          MusicControl fork v2.0.3 (JobDestroyer/MusicControlol). If status stays
           on “waiting for backend”, the Python side did not load — reinstall the
           release zip and Reload plugins.
         </div>
