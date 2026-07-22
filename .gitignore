@@ -22,6 +22,7 @@ coverage
 # Dependency directory
 node_modules
 bower_components
+.pnpm-store
 
 # Editors
 .idea
@@ -31,11 +32,27 @@ bower_components
 .DS_Store
 Thumbs.db
 
-# Ignore built ts files
-dist/
+# Built frontend is committed so the plugin is installable without a local Node build.
+# Uncomment to ignore if you prefer build-only workflows:
+# dist/
 
 __pycache__/
 
 /.yalc
 yalc.lock
+
 .vscode/settings.json
+
+# Ignore output folder
+
+backend/out
+
+# Make sure to ignore any instance of the loader's decky_plugin.py
+decky_plugin.py
+
+# Ignore decky CLI for building plugins
+out
+out/*
+cli/
+cli/*
+cli/decky

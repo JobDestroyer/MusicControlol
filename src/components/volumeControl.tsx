@@ -1,56 +1,34 @@
-import { useEffect, useRef, VFC } from "react";
-import {
-  PanelSectionRow,
-  SliderField,
-  staticClasses,
-} from "decky-frontend-lib";
-import { useStateContext, AppActions } from "../context/context";
-import * as python from "./../python";
+import { PanelSectionRow, SliderField, staticClasses } from "@decky/ui";
+import { useEffect, useRef, type FC } from "react";
+import { setVolume } from "../backend";
+import { AppActions, useStateContext } from "../context/context";
 
-export const VolumeControl: VFC = () => {
+export const VolumeControl: FC = () => {
   const { state, dispatch } = useStateContext();
-  const volumeTimeoutRef = useRef<NodeJS.Timer | null>(null);
+  const volumeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const onSliderChanged = (value: number) => {
-    const normalizedValue = (value /= 100.0);
-    python.execute(python.triggerSetVolume(normalizedValue));
+    const normalized = value / 100.0;
+    void setVolume(normalized);
+    dispatch({ type: AppActions.AdjustVolumeByUser, value: normalized });
 
-    dispatch({
-      type: AppActions.AdjustVolumeByUser,
-      value: normalizedValue,
-    });
-
-    if (volumeTimeoutRef.current != null) {
-      clearTimeout(volumeTimeoutRef.current!);
-    }
-
+    if (volumeTimeoutRef.current != null) clearTimeout(volumeTimeoutRef.current);
     volumeTimeoutRef.current = setTimeout(() => {
-      dispatch({
-        type: AppActions.SetIsAdjustingVolume,
-        value: false,
-      });
+      dispatch({ type: AppActions.SetIsAdjustingVolume, value: false });
     }, 1500);
   };
 
-  const onDismount = () => {
-    clearTimeout(volumeTimeoutRef!.current!);
-    volumeTimeoutRef.current = null;
-  };
-
   useEffect(() => {
-    // Clear the interval when the component unmounts
     return () => {
-      onDismount();
+      if (volumeTimeoutRef.current != null) clearTimeout(volumeTimeoutRef.current);
     };
   }, []);
 
   if (!state.hasAvailableTrack || !state.canModifyVolume) return <div />;
+
   return (
     <div>
-      <div
-        style={{ marginTop: "5px" }}
-        className={staticClasses.PanelSectionTitle}
-      >
+      <div style={{ marginTop: "5px" }} className={staticClasses.PanelSectionTitle}>
         Playback Volume
       </div>
       <PanelSectionRow>
@@ -60,7 +38,7 @@ export const VolumeControl: VFC = () => {
           max={100}
           step={1}
           onChange={onSliderChanged}
-        ></SliderField>
+        />
       </PanelSectionRow>
     </div>
   );

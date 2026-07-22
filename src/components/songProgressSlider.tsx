@@ -1,49 +1,31 @@
-import { useEffect, useRef, VFC } from "react";
-import { PanelSectionRow, SliderField } from "decky-frontend-lib";
-import { useStateContext, AppActions } from "../context/context";
-import * as python from "./../python";
+import { PanelSectionRow, SliderField } from "@decky/ui";
+import { useEffect, useRef, type FC } from "react";
+import { setPosition } from "../backend";
+import { AppActions, useStateContext } from "../context/context";
 
-export const SongProgressSlider: VFC = () => {
+export const SongProgressSlider: FC = () => {
   const { state, dispatch } = useStateContext();
-  const seekTimeoutRef = useRef<NodeJS.Timer | null>(null);
+  const seekTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const onSliderChanged = (value: number) => {
     const roundedProgress = Math.round(value * state.currentTrackLength);
+    void setPosition(roundedProgress, state.currentTrackId);
+    dispatch({ type: AppActions.SeekToPosition, value: roundedProgress });
 
-    python.execute(
-      python.triggerSetPosition(roundedProgress, state.currentTrackId)
-    );
-
-    dispatch({
-      type: AppActions.SeekToPosition,
-      value: roundedProgress,
-    });
-
-    if (seekTimeoutRef.current != null) {
-      clearTimeout(seekTimeoutRef.current!);
-    }
-
+    if (seekTimeoutRef.current != null) clearTimeout(seekTimeoutRef.current);
     seekTimeoutRef.current = setTimeout(() => {
-      dispatch({
-        type: AppActions.SetIsSeeking,
-        value: false,
-      });
+      dispatch({ type: AppActions.SetIsSeeking, value: false });
     }, 1500);
   };
 
-  const onDismount = () => {
-    clearTimeout(seekTimeoutRef!.current!);
-    seekTimeoutRef.current = null;
-  };
-
   useEffect(() => {
-    // Clear the interval when the component unmounts
     return () => {
-      onDismount();
+      if (seekTimeoutRef.current != null) clearTimeout(seekTimeoutRef.current);
     };
   }, []);
 
-  if (state.currentTrackLength <= 1) return <div></div>;
+  if (state.currentTrackLength <= 1) return <div />;
+
   return (
     <PanelSectionRow>
       <SliderField
@@ -51,9 +33,9 @@ export const SongProgressSlider: VFC = () => {
         min={0}
         max={1}
         step={0.05}
-        disabled={!state.canSeek}
+        disabled={!state.canSeek || !state.currentTrackId}
         onChange={onSliderChanged}
-      ></SliderField>
+      />
     </PanelSectionRow>
   );
 };

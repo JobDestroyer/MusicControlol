@@ -1,43 +1,50 @@
-import { useState, VFC } from "react";
+import { useEffect, useState, type FC } from "react";
+import { cacheAlbumArt } from "../backend";
 import { defaultState } from "../context/defaultState";
-import * as python from "./../python";
 
-export const AlbumArt: VFC<{ albumArt: string }> = ({ albumArt }) => {
-  const [isCachingArt, setIsCachingArt] = useState<boolean>(false);
-  const [lastCachedUrl, setLastCachedUrl] = useState<string>("");
-  const [currentDisplayUrl, setCurrentDisplayUrl] = useState<string>(
-    defaultState.currentArtUrl
-  );
+export const AlbumArt: FC<{ albumArt: string }> = ({ albumArt }) => {
+  const [displayUrl, setDisplayUrl] = useState<string>(defaultState.currentArtUrl);
 
-  if (lastCachedUrl != albumArt && !isCachingArt) {
-    if (albumArt.startsWith("file:///")) {
-      setIsCachingArt(true);
-      python.resolve(python.cacheAlbumArt(albumArt), (cachedArt: string) => {
-        if (cachedArt == "") {
-          setCurrentDisplayUrl(defaultState.currentArtUrl);
-        } else {
-          setCurrentDisplayUrl(cachedArt);
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      if (!albumArt || albumArt === defaultState.currentArtUrl) {
+        if (!cancelled) setDisplayUrl(defaultState.currentArtUrl);
+        return;
+      }
+
+      if (albumArt.startsWith("file:") || albumArt.startsWith("file:///")) {
+        try {
+          const cached = await cacheAlbumArt(albumArt);
+          if (!cancelled) {
+            setDisplayUrl(cached || defaultState.currentArtUrl);
+          }
+        } catch {
+          if (!cancelled) setDisplayUrl(defaultState.currentArtUrl);
         }
+        return;
+      }
 
-        setIsCachingArt(false);
-      });
-    } else {
-      setCurrentDisplayUrl(albumArt);
-    }
+      if (!cancelled) setDisplayUrl(albumArt);
+    })();
 
-    setLastCachedUrl(albumArt);
-  }
+    return () => {
+      cancelled = true;
+    };
+  }, [albumArt]);
 
   return (
-    <div style={{ width: "80px", height: "80px" }}>
+    <div style={{ width: "80px", height: "80px", flexShrink: 0 }}>
       <img
-        style={{ borderRadius: "5px", width: "80px", height: "80px" }}
-        src={currentDisplayUrl}
+        style={{ borderRadius: "5px", width: "80px", height: "80px", objectFit: "cover" }}
+        src={displayUrl}
+        alt=""
         onError={({ currentTarget }) => {
-          if (currentTarget.src == defaultState.currentArtUrl) return;
+          if (currentTarget.src === defaultState.currentArtUrl) return;
           currentTarget.src = defaultState.currentArtUrl;
         }}
-      ></img>
+      />
     </div>
   );
 };

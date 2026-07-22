@@ -1,36 +1,13 @@
-import { definePlugin, ServerAPI, SteamSpinner } from "decky-frontend-lib";
+import { definePlugin } from "@decky/api";
+import { staticClasses } from "@decky/ui";
 import { FaMusic } from "react-icons/fa";
-import { Title } from "./components/title";
 import { Content } from "./components/content";
 import { AppContextProvider } from "./context/context";
-import * as python from "./python";
-import { InfoRoute } from "./routes";
-import { Suspense } from "react";
 
-export default definePlugin((serverApi: ServerAPI) => {
-  python.setServer(serverApi);
-  serverApi.routerHook.addRoute("/decky/musiccontrol/info", InfoRoute, () => {
-    return (
-      <Suspense
-        fallback={
-          <div
-            style={{
-              marginTop: "40px",
-              height: "calc( 100% - 40px )",
-              overflowY: "scroll",
-            }}
-          >
-            <SteamSpinner />
-          </div>
-        }
-      >
-        <InfoRoute />
-      </Suspense>
-    );
-  });
-
+export default definePlugin(() => {
   return {
-    title: <Title />,
+    name: "MusicControl",
+    titleView: <div className={staticClasses.Title}>MusicControl</div>,
     content: (
       <AppContextProvider>
         <Content />
@@ -38,7 +15,7 @@ export default definePlugin((serverApi: ServerAPI) => {
     ),
     icon: <FaMusic />,
     onDismount() {
-      serverApi.routerHook.removeRoute("/decky/musiccontrol/info");
+      // nothing to clean up beyond React unmount
     },
   };
 });

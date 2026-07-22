@@ -1,18 +1,10 @@
-import React, { useReducer, createContext } from "react";
-import * as utils from "../utils";
-import { defaultMeta, defaultState } from "./defaultState";
+import { createContext, useContext, useReducer, type ReactNode } from "react";
+import type { PlayerInfo, TrackMetadata } from "../types";
+import { defaultMeta, defaultState, type AppState } from "./defaultState";
 
-type ProviderIdentity = {
-  provider: string;
-  name: string;
-};
-
-enum AppActions {
+export enum AppActions {
   SetDefaultState,
   SetDefaultMeta,
-  SetState,
-  SetHasChangedProvider,
-  SetHasAvailableTrack,
   SetIsSeeking,
   SeekToPosition,
   SetIsAdjustingVolume,
@@ -26,151 +18,85 @@ enum AppActions {
   SetVolume,
   SetCanSeek,
   SetProviders,
-  AddProviderIdentity,
+  SetProviderIdentities,
   SetHasChangedPlaybackState,
+  SetLastError,
 }
 
 type Action =
   | { type: AppActions.SetDefaultState }
   | { type: AppActions.SetDefaultMeta }
-  | { type: AppActions.SetState; value: State }
-  | { type: AppActions.SetIsSeeking; value: State["isSeeking"] }
-  | { type: AppActions.SeekToPosition; value: State["currentTrackProgress"] }
-  | { type: AppActions.SetPlayingState; value: State["currentTrackStatus"] }
-  | {
-      type: AppActions.SetPlayingStateByUser;
-      value: State["currentTrackStatus"];
-    }
-  | { type: AppActions.SetIsAdjustingVolume; value: State["isSettingVolume"] }
-  | { type: AppActions.AdjustVolumeByUser; value: State["currentVolume"] }
-  | { type: AppActions.SetVolume; value: State["currentVolume"] }
-  | {
-      type: AppActions.SetHasChangedPlaybackState;
-      value: State["hasChangedPlaybackState"];
-    }
-  | { type: AppActions.SetTrackProgress; value: State["currentTrackProgress"] }
-  | { type: AppActions.SetCanModifyVolume; value: State["canModifyVolume"] }
-  | { type: AppActions.SetCanSeek; value: State["canSeek"] }
-  | { type: AppActions.SetProviders; value: State["providers"] }
-  | {
-      type: AppActions.AddProviderIdentity;
-      value: ProviderIdentity;
-    }
-  | {
-      type: AppActions.SetHasChangedProvider;
-      value: State["hasChangedProvider"];
-    }
-  | {
-      type: AppActions.SetCurrentServiceProvider;
-      value: State["currentServiceProvider"];
-    }
-  | {
-      type: AppActions.SetHasAvailableTrack;
-      value: State["hasAvailableTrack"];
-    }
-  | {
-      type: AppActions.SetMetaData;
-      value: Record<string, string>;
-    };
+  | { type: AppActions.SetIsSeeking; value: boolean }
+  | { type: AppActions.SeekToPosition; value: number }
+  | { type: AppActions.SetPlayingState; value: string }
+  | { type: AppActions.SetPlayingStateByUser; value: string }
+  | { type: AppActions.SetIsAdjustingVolume; value: boolean }
+  | { type: AppActions.AdjustVolumeByUser; value: number }
+  | { type: AppActions.SetVolume; value: number }
+  | { type: AppActions.SetHasChangedPlaybackState; value: boolean }
+  | { type: AppActions.SetTrackProgress; value: number }
+  | { type: AppActions.SetCanModifyVolume; value: boolean }
+  | { type: AppActions.SetCanSeek; value: boolean }
+  | { type: AppActions.SetProviders; value: string[] }
+  | { type: AppActions.SetProviderIdentities; value: PlayerInfo[] }
+  | { type: AppActions.SetCurrentServiceProvider; value: string }
+  | { type: AppActions.SetMetaData; value: TrackMetadata }
+  | { type: AppActions.SetLastError; value: string };
 
 type Dispatch = (action: Action) => void;
 
-type State = {
-  hasChangedPlaybackState: boolean;
-  hasChangedProvider: boolean;
-  isSeeking: boolean;
-  isSettingVolume: boolean;
-  hasAvailableTrack: boolean;
-  currentSong: string;
-  currentArtist: string;
-  currentArtUrl: string;
-  currentTrackId: string;
-  currentTrackProgress: number;
-  currentTrackLength: number;
-  currentTrackStatus: string;
-  currentServiceProvider: string;
-  providers: string[];
-  providersToIdentity: ProviderIdentity[];
-  currentVolume: number;
-  canModifyVolume: boolean;
-  canSeek: boolean;
-};
-
 const AppStateContext = createContext<{
-  state: State;
+  state: AppState;
   dispatch: Dispatch;
 }>({
   state: defaultState,
   dispatch: () => null,
 });
 
-function mainReducer(state: State, action: Action) {
+function mainReducer(state: AppState, action: Action): AppState {
   switch (action.type) {
-    case AppActions.SetDefaultState: {
+    case AppActions.SetDefaultState:
       return { ...state, ...defaultState };
-    }
-    case AppActions.SetDefaultMeta: {
+    case AppActions.SetDefaultMeta:
       return { ...state, ...defaultMeta };
-    }
-    case AppActions.SetState: {
-      return { ...state, ...action.value };
-    }
-    case AppActions.SetIsSeeking: {
+    case AppActions.SetIsSeeking:
       return { ...state, isSeeking: action.value };
-    }
-    case AppActions.SetHasChangedPlaybackState: {
+    case AppActions.SetHasChangedPlaybackState:
       return { ...state, hasChangedPlaybackState: action.value };
-    }
-    case AppActions.SetCanSeek: {
+    case AppActions.SetCanSeek:
       return { ...state, canSeek: action.value };
-    }
-    case AppActions.SeekToPosition: {
+    case AppActions.SeekToPosition:
       return { ...state, currentTrackProgress: action.value, isSeeking: true };
-    }
-    case AppActions.SetPlayingState: {
+    case AppActions.SetPlayingState:
       if (state.hasChangedPlaybackState) return state;
       return { ...state, currentTrackStatus: action.value };
-    }
-    case AppActions.SetPlayingStateByUser: {
-      return { ...state, currentTrackStatus: action.value };
-    }
-    case AppActions.SetIsAdjustingVolume: {
-      return { ...state, isSettingVolume: action.value };
-    }
-    case AppActions.SetHasChangedProvider: {
-      return { ...state, hasChangedProvider: action.value };
-    }
-    case AppActions.SetProviders: {
-      return { ...state, providers: action.value };
-    }
-    case AppActions.AddProviderIdentity: {
+    case AppActions.SetPlayingStateByUser:
       return {
         ...state,
-        providersToIdentity: [...state.providersToIdentity, action.value],
+        currentTrackStatus: action.value,
+        hasChangedPlaybackState: true,
       };
-    }
-    case AppActions.SetTrackProgress: {
+    case AppActions.SetIsAdjustingVolume:
+      return { ...state, isSettingVolume: action.value };
+    case AppActions.SetProviders:
+      return { ...state, providers: action.value };
+    case AppActions.SetProviderIdentities:
+      return { ...state, providersToIdentity: action.value };
+    case AppActions.SetTrackProgress:
       if (state.isSeeking) return state;
       return {
         ...state,
-        currentTrackProgress: utils.isValidNumber(action.value)
-          ? action.value
-          : 0.0,
+        currentTrackProgress: Number.isFinite(action.value) ? action.value : 0,
       };
-    }
-    case AppActions.SetCanModifyVolume: {
+    case AppActions.SetCanModifyVolume:
       return { ...state, canModifyVolume: action.value };
-    }
-    case AppActions.AdjustVolumeByUser: {
+    case AppActions.AdjustVolumeByUser:
       return { ...state, currentVolume: action.value, isSettingVolume: true };
-    }
-    case AppActions.SetVolume: {
+    case AppActions.SetVolume:
       if (state.isSettingVolume) return state;
-
       return { ...state, currentVolume: action.value };
-    }
     case AppActions.SetCurrentServiceProvider: {
-      const hasChanged = state.currentServiceProvider != action.value;
+      const hasChanged = state.currentServiceProvider !== action.value;
       if (hasChanged) {
         return {
           ...state,
@@ -178,69 +104,42 @@ function mainReducer(state: State, action: Action) {
           hasChangedProvider: true,
         };
       }
-
       return state;
-    }
-    case AppActions.SetHasAvailableTrack: {
-      return { ...state, hasAvailableTrack: action.value };
     }
     case AppActions.SetMetaData: {
-      const title = utils.isValidStringValueInRecord(action.value, "title")
-        ? action.value["title"]
-        : defaultState.currentSong;
-      const artist = utils.isValidStringValueInRecord(action.value, "artist")
-        ? action.value["artist"]
-        : defaultState.currentArtist;
-      const albumUrl = utils.getValidAlbumArtUrlInRecord(
-        action.value,
-        "artUrl"
-      );
-      const trackLength = utils.isValidNumberInRecord(action.value, "length")
-        ? parseFloat(action.value["length"])
-        : defaultState.currentTrackLength;
-      const trackId = utils.isValidStringValueInRecord(action.value, "trackid")
-        ? action.value["trackid"]
-        : defaultState.currentTrackId;
+      const m = action.value;
       return {
         ...state,
-        currentSong: title,
-        currentArtist: artist,
-        currentArtUrl: albumUrl,
-        hasAvailableTrack: true,
-        currentTrackLength: trackLength,
-        currentTrackId: trackId,
+        currentSong: m.title || defaultState.currentSong,
+        currentArtist: m.artist || defaultState.currentArtist,
+        currentArtUrl: m.artUrl || defaultState.currentArtUrl,
+        hasAvailableTrack: Boolean(m.title || m.trackid || m.artUrl),
+        currentTrackLength: m.length && m.length > 0 ? m.length : defaultState.currentTrackLength,
+        currentTrackId: m.trackid || "",
       };
     }
-    default: {
+    case AppActions.SetLastError:
+      return { ...state, lastError: action.value };
+    default:
       return state;
-    }
   }
 }
 
-const AppContextProvider: React.FC = ({ children }) => {
+export const AppContextProvider = ({ children }: { children: ReactNode }) => {
   const [state, dispatch] = useReducer(mainReducer, defaultState);
-
-  const value = { state, dispatch };
   return (
-    <AppStateContext.Provider value={value}>
+    <AppStateContext.Provider value={{ state, dispatch }}>
       {children}
     </AppStateContext.Provider>
   );
 };
 
-function useStateContext() {
-  const context = React.useContext(AppStateContext);
+export function useStateContext() {
+  const context = useContext(AppStateContext);
   if (context === undefined) {
-    throw new Error("useSettings must be used within a AppContextProvider");
+    throw new Error("useStateContext must be used within AppContextProvider");
   }
   return context;
 }
 
-export {
-  AppContextProvider,
-  AppStateContext,
-  ProviderIdentity,
-  defaultState,
-  AppActions,
-  useStateContext,
-};
+export { defaultState, AppStateContext };

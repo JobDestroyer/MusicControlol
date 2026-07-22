@@ -3,62 +3,52 @@ import {
   Menu,
   MenuItem,
   showContextMenu,
-} from "decky-frontend-lib";
+} from "@decky/ui";
+import type { FC } from "react";
+import { setPlayer } from "../backend";
+import { AppActions, useStateContext } from "../context/context";
 
-import { VFC } from "react";
-import {
-  AppActions,
-  ProviderIdentity,
-  useStateContext,
-} from "../context/context";
-import * as python from "./../python";
+type Props = { currentProvider: string };
 
-type MediaProviderProps = {
-  currentProvider: string;
-};
-export const MediaProviderButton: VFC<MediaProviderProps> = (
-  props: MediaProviderProps
-) => {
+export const MediaProviderButton: FC<Props> = ({ currentProvider }) => {
   const { state, dispatch } = useStateContext();
 
-  const getDisplayNameForProvider = (provider: string) => {
-    const providerIndex = state.providersToIdentity.findIndex(
-      (mapping: ProviderIdentity) => mapping.provider == provider
-    );
-
-    if (providerIndex < 0)
-      return provider.replace("org.mpris.MediaPlayer2.", "");
-
-    return state.providersToIdentity[providerIndex].name;
+  const displayName = (provider: string) => {
+    const found = state.providersToIdentity.find((p) => p.busName === provider);
+    if (found?.identity) return found.identity;
+    return provider.replace("org.mpris.MediaPlayer2.", "");
   };
 
   const handleOnClick = (e: MouseEvent) =>
     showContextMenu(
       <Menu label="Select Media Player" cancelText="Cancel">
-        {state.providers.map((provider: string) => {
-          return (
+        {state.providers.length === 0 ? (
+          <MenuItem onSelected={() => undefined}>No players found</MenuItem>
+        ) : (
+          state.providers.map((provider) => (
             <MenuItem
+              key={provider}
               onSelected={() => {
-                python.setMediaPlayer(provider);
+                void setPlayer(provider);
                 dispatch({
                   type: AppActions.SetCurrentServiceProvider,
                   value: provider,
                 });
               }}
             >
-              {getDisplayNameForProvider(provider)}
+              {displayName(provider)}
             </MenuItem>
-          );
-        })}
+          ))
+        )}
       </Menu>,
       e.currentTarget ?? window
     );
 
   return (
-    <ButtonItem layout="below" bottomSeparator='none' onClick={handleOnClick}>
-      {props.currentProvider == ""
+    <ButtonItem layout="below" bottomSeparator="none" onClick={handleOnClick}>
+      {currentProvider === ""
         ? "No Media Player Found"
-        : getDisplayNameForProvider(props.currentProvider)}
+        : displayName(currentProvider)}
     </ButtonItem>
   );
 };

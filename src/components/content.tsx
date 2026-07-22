@@ -1,213 +1,132 @@
-import {
-  PanelSection,
-  PanelSectionRow,
-  staticClasses,
-} from "decky-frontend-lib";
-
-import { VFC, useEffect, useRef } from "react";
-import { musicControlDividerStyle } from "./../styles/style";
-
-import { InfoSection } from ".//../components/infoSection";
-import { AlbumArt } from ".//../components/albumArt";
-import { ArtistInfoPanel } from ".//../components/artistInfoPanel";
-import { SongProgressSlider } from ".//../components/songProgressSlider";
-import {
-  AppActions,
-  defaultState,
-  ProviderIdentity,
-  useStateContext,
-} from ".//../context/context";
-import * as python from ".//../python";
+import { PanelSection, PanelSectionRow, staticClasses } from "@decky/ui";
+import { useEffect, useRef, type FC } from "react";
+import { getStatus, listPlayers, setPlayer } from "../backend";
+import { AppActions, useStateContext } from "../context/context";
+import { musicControlDividerStyle } from "../styles/style";
+import { AlbumArt } from "./albumArt";
+import { ArtistInfoPanel } from "./artistInfoPanel";
 import { MediaProviderButton } from "./mediaProviderButton";
 import { MusicControls } from "./musicControls";
+import { SongProgressSlider } from "./songProgressSlider";
 import { VolumeControl } from "./volumeControl";
 
-export const Content: VFC = () => {
+export const Content: FC = () => {
   const { state, dispatch } = useStateContext();
-  const updateCallback = useRef<() => void>();
+  const updateCallback = useRef<() => void>(() => undefined);
+  // Keep latest state for the interval without resetting the timer
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
-  const updateStatus = () => {
-    python.resolve(python.getMediaPlayerList(), (mediaPlayers: string) => {
-      if (
-        mediaPlayers == "Unavailable" ||
-        mediaPlayers == null ||
-        typeof mediaPlayers != "string" ||
-        mediaPlayers == ""
-      ) {
+  const updateStatus = async () => {
+    const s = stateRef.current;
+    try {
+      const players = await listPlayers();
+      const busNames = players.map((p) => p.busName);
+      dispatch({ type: AppActions.SetProviders, value: busNames });
+      dispatch({ type: AppActions.SetProviderIdentities, value: players });
+
+      if (busNames.length === 0) {
         dispatch({ type: AppActions.SetDefaultState });
+        dispatch({
+          type: AppActions.SetLastError,
+          value: "No MPRIS players on the session bus. Start the app from Game Mode.",
+        });
         return;
       }
 
-      const providers = mediaPlayers.split(",");
-      dispatch({ type: AppActions.SetProviders, value: providers });
-
-      if (
-        !providers.includes(state.currentServiceProvider) ||
-        state.currentServiceProvider == ""
-      ) {
-        if (providers.length > 0) {
-          dispatch({
-            type: AppActions.SetCurrentServiceProvider,
-            value: providers[0],
-          });
-          python.setMediaPlayer(providers[0]);
-        } else {
-          if (state.currentServiceProvider == "") return;
-          dispatch({
-            type: AppActions.SetCurrentServiceProvider,
-            value: "",
-          });
-          python.setMediaPlayer("");
-          return;
-        }
+      let active = s.currentServiceProvider;
+      if (!active || !busNames.includes(active)) {
+        active = busNames[0];
+        dispatch({ type: AppActions.SetCurrentServiceProvider, value: active });
+        await setPlayer(active);
       }
 
-      providers.forEach((provider: string) => {
-        const identityIndex = state.providersToIdentity.findIndex(
-          (mapping: ProviderIdentity) => mapping.provider == provider
-        );
-        if (identityIndex >= 0) return;
+      const status = await getStatus();
+      if (status.error) {
+        dispatch({ type: AppActions.SetLastError, value: status.error });
+      } else {
+        dispatch({ type: AppActions.SetLastError, value: "" });
+      }
 
-        python.resolve(
-          python.getProviderIdentity(provider),
-          (providerName: string) => {
-            dispatch({
-              type: AppActions.AddProviderIdentity,
-              value: { provider: provider, name: providerName },
-            });
-          }
-        );
-      });
-
-      updateTrackData();
-    });
-  };
-
-  const isValidMetaData = (metaData: string) => {
-    return (
-      metaData != "Unavailable" &&
-      metaData != null &&
-      typeof metaData == "string" &&
-      metaData != "" &&
-      metaData.length > 0
-    );
-  };
-
-  const updateTrackData = () => {
-    python.resolve(python.getMetaData(), (metaData: string) => {
-      if (!isValidMetaData(metaData)) {
+      if (!status.available) {
         dispatch({ type: AppActions.SetDefaultMeta });
         return;
       }
 
-      const variables = metaData.split("\n");
-      const metaObject = {};
-
-      variables.forEach((value: string) => {
-        const keyValue = value.split("|");
-        metaObject[keyValue[0]] = keyValue[1];
-      });
-
-      dispatch({ type: AppActions.SetMetaData, value: metaObject });
-
-      // In some rare cases for the first time the metaData can be correct but it won't have any actual info yet
-      if (
-        (state.currentTrackId == "" ||
-          state.currentTrackId == defaultState.currentTrackId) &&
-        "trackid" in metaObject &&
-        metaObject["trackid"] != ""
-      ) {
-        dispatch({ type: AppActions.SetHasChangedProvider, value: true });
-      }
-
-      if (!state.isSeeking) {
-        python.resolve(python.getTrackProgress(), (progress: number) => {
-          dispatch({ type: AppActions.SetTrackProgress, value: progress });
-        });
-      }
-
-      python.resolve(python.triggerTrackStatus(), (status: string) => {
-        dispatch({ type: AppActions.SetPlayingState, value: status });
-      });
-
-      if (state.canModifyVolume)
-        python.resolve(python.getTrackVolume(), (volume: number) => {
-          dispatch({
-            type: AppActions.SetVolume,
-            value: volume,
-          });
-        });
-
-      if (state.hasChangedProvider) {
-        console.debug("Changed MusicControl provider, testing for featureset.");
-        python.resolve(python.testVolumeControl(), (result: string) => {
-          dispatch({
-            type: AppActions.SetCanModifyVolume,
-            value: result == "true",
-          });
-
-          if (result == "true")
-            python.resolve(python.getTrackVolume(), (volume: number) => {
-              dispatch({
-                type: AppActions.AdjustVolumeByUser,
-                value: volume,
-              });
-              dispatch({
-                type: AppActions.SetIsAdjustingVolume,
-                value: false,
-              });
-            });
-        });
-
-        python.resolve(python.getCanSeek(), (result: string) => {
-          dispatch({
-            type: AppActions.SetCanSeek,
-            value: result == "true",
-          });
-        });
-
+      if (status.player && status.player !== s.currentServiceProvider) {
         dispatch({
-          type: AppActions.SetHasChangedProvider,
-          value: false,
+          type: AppActions.SetCurrentServiceProvider,
+          value: status.player,
         });
       }
-    });
+
+      if (status.metadata && (status.hasTrack || Object.keys(status.metadata).length > 0)) {
+        dispatch({ type: AppActions.SetMetaData, value: status.metadata });
+      } else {
+        dispatch({ type: AppActions.SetDefaultMeta });
+      }
+
+      if (!s.isSeeking) {
+        dispatch({ type: AppActions.SetTrackProgress, value: status.position });
+      }
+
+      dispatch({ type: AppActions.SetPlayingState, value: status.playbackStatus });
+      dispatch({ type: AppActions.SetCanSeek, value: status.canSeek });
+      dispatch({
+        type: AppActions.SetCanModifyVolume,
+        value: status.canControlVolume,
+      });
+
+      if (status.canControlVolume && !s.isSettingVolume) {
+        dispatch({ type: AppActions.SetVolume, value: status.volume });
+      }
+    } catch (e) {
+      dispatch({
+        type: AppActions.SetLastError,
+        value: e instanceof Error ? e.message : String(e),
+      });
+    }
   };
 
   useEffect(() => {
-    updateCallback.current = updateStatus;
+    updateCallback.current = () => {
+      void updateStatus();
+    };
   });
 
   useEffect(() => {
-    console.debug("Setting up periodic hooks for MusicControl.");
-    function tick() {
-      updateCallback!.current!();
-    }
-    const id = setInterval(tick, 1000);
-    updateStatus();
-
+    const id = setInterval(() => updateCallback.current(), 1000);
+    void updateStatus();
     return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
     <PanelSection>
       <div className={staticClasses.PanelSectionTitle}>Currently Playing</div>
-      <div style={{ display: "flex", marginBottom: "5px" }}>
+      <div style={{ display: "flex", marginBottom: "5px", alignItems: "center" }}>
         <AlbumArt albumArt={state.currentArtUrl} />
-        <ArtistInfoPanel
-          title={state.currentSong}
-          artist={state.currentArtist}
-        />
+        <ArtistInfoPanel title={state.currentSong} artist={state.currentArtist} />
       </div>
       <SongProgressSlider />
       <MusicControls />
-      <div style={musicControlDividerStyle}></div>
+      <div style={musicControlDividerStyle} />
       <VolumeControl />
       <PanelSectionRow>
         <MediaProviderButton currentProvider={state.currentServiceProvider} />
       </PanelSectionRow>
+      {state.lastError ? (
+        <PanelSectionRow>
+          <div style={{ fontSize: "0.8em", opacity: 0.75, marginTop: "4px" }}>
+            {state.lastError}
+          </div>
+        </PanelSectionRow>
+      ) : null}
       <PanelSectionRow>
-        <InfoSection />
+        <div style={{ fontSize: "0.75em", opacity: 0.6, marginTop: "8px" }}>
+          Start players from Game Mode so they share the session D-Bus. Works with
+          Strawberry, Spotify, Firefox, and other MPRIS apps.
+        </div>
       </PanelSectionRow>
     </PanelSection>
   );

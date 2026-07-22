@@ -1,4 +1,5 @@
 import default_music from "../../assets/default_music.png";
+import type { PlayerInfo } from "../types";
 
 export const defaultState = {
   hasChangedPlaybackState: false,
@@ -8,17 +9,18 @@ export const defaultState = {
   hasAvailableTrack: false,
   currentSong: "Not Playing",
   currentArtist: "Unknown Artist",
-  currentArtUrl: default_music,
-  currentTrackId: "/not/used",
+  currentArtUrl: default_music as string,
+  currentTrackId: "",
   currentTrackProgress: 0,
   currentTrackLength: 1,
   currentTrackStatus: "Paused",
   currentServiceProvider: "",
-  providers: [],
-  providersToIdentity: [],
+  providers: [] as string[],
+  providersToIdentity: [] as PlayerInfo[],
   currentVolume: 1.0,
   canModifyVolume: false,
   canSeek: false,
+  lastError: "",
 };
 
 export const defaultMeta = {
@@ -28,8 +30,8 @@ export const defaultMeta = {
   isSettingVolume: false,
   currentSong: "Not Playing",
   currentArtist: "Unknown Artist",
-  currentArtUrl: default_music,
-  currentTrackId: "/not/used",
+  currentArtUrl: default_music as string,
+  currentTrackId: "",
   currentTrackProgress: 0,
   currentTrackLength: 1,
   currentTrackStatus: "Paused",
@@ -37,3 +39,5 @@ export const defaultMeta = {
   canModifyVolume: false,
   canSeek: false,
 };
+
+export type AppState = typeof defaultState;

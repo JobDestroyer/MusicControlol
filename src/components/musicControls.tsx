@@ -1,57 +1,42 @@
-import { DialogButton, Focusable } from "decky-frontend-lib";
-
-import { useEffect, useRef, VFC } from "react";
-import { useStateContext, AppActions } from "../context/context";
-import * as python from "./../python";
+import { DialogButton, Focusable } from "@decky/ui";
+import { useEffect, useRef, type FC } from "react";
+import { FaFastBackward, FaFastForward, FaPause, FaPlay } from "react-icons/fa";
+import { nextTrack, playPause, previousTrack } from "../backend";
+import { AppActions, useStateContext } from "../context/context";
 import {
   musicControlButtonStyle,
   musicControlButtonStyleFirst,
 } from "../styles/style";
-import { FaPlay, FaPause, FaFastForward, FaFastBackward } from "react-icons/fa";
 
-export const MusicControls: VFC = () => {
+export const MusicControls: FC = () => {
   const { state, dispatch } = useStateContext();
-  const playPauseToggledTrimoutRef = useRef<NodeJS.Timer | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const onClickPrevious = () => {
-    python.execute(python.triggerPrevious());
+  const onPrevious = () => {
+    void previousTrack();
   };
 
-  const onClickPlayPause = () => {
+  const onPlayPause = () => {
     if (state.hasAvailableTrack) {
-      if (playPauseToggledTrimoutRef.current != null) {
-        clearTimeout(playPauseToggledTrimoutRef.current!);
-      }
-
+      if (timeoutRef.current != null) clearTimeout(timeoutRef.current);
       dispatch({
         type: AppActions.SetPlayingStateByUser,
-        value: state.currentTrackStatus == "Playing" ? "Paused" : "Playing",
+        value: state.currentTrackStatus === "Playing" ? "Paused" : "Playing",
       });
-
-      playPauseToggledTrimoutRef.current = setTimeout(() => {
-        dispatch({
-          type: AppActions.SetHasChangedPlaybackState,
-          value: false,
-        });
+      timeoutRef.current = setTimeout(() => {
+        dispatch({ type: AppActions.SetHasChangedPlaybackState, value: false });
       }, 1000);
     }
-
-    python.execute(python.triggerPlay());
+    void playPause();
   };
 
-  const onClickNext = () => {
-    python.execute(python.triggerNext());
-  };
-
-  const onDismount = () => {
-    clearTimeout(playPauseToggledTrimoutRef!.current!);
-    playPauseToggledTrimoutRef.current = null;
+  const onNext = () => {
+    void nextTrack();
   };
 
   useEffect(() => {
-    // Clear the interval when the component unmounts
     return () => {
-      onDismount();
+      if (timeoutRef.current != null) clearTimeout(timeoutRef.current);
     };
   }, []);
 
@@ -60,20 +45,17 @@ export const MusicControls: VFC = () => {
       style={{ marginTop: "10px", marginBottom: "10px", display: "flex" }}
       flow-children="horizontal"
     >
-      <DialogButton
-        style={musicControlButtonStyleFirst}
-        onClick={onClickPrevious}
-      >
+      <DialogButton style={musicControlButtonStyleFirst} onClick={onPrevious}>
         <FaFastBackward style={{ marginTop: "-4px", display: "block" }} />
       </DialogButton>
-      <DialogButton style={musicControlButtonStyle} onClick={onClickPlayPause}>
-        {state.currentTrackStatus == "Playing" ? (
+      <DialogButton style={musicControlButtonStyle} onClick={onPlayPause}>
+        {state.currentTrackStatus === "Playing" ? (
           <FaPause style={{ marginTop: "-4px", display: "block" }} />
         ) : (
           <FaPlay style={{ marginTop: "-4px", display: "block" }} />
         )}
       </DialogButton>
-      <DialogButton style={musicControlButtonStyle} onClick={onClickNext}>
+      <DialogButton style={musicControlButtonStyle} onClick={onNext}>
         <FaFastForward style={{ marginTop: "-4px", display: "block" }} />
       </DialogButton>
     </Focusable>
