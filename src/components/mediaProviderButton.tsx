@@ -44,11 +44,16 @@ export const MediaProviderButton: FC<Props> = ({ currentProvider }) => {
       e.currentTarget ?? window
     );
 
+  const label =
+    currentProvider === ""
+      ? state.providers.length === 0
+        ? "No Media Player Found (tap for info)"
+        : "Select media player…"
+      : displayName(currentProvider);
+
   return (
     <ButtonItem layout="below" bottomSeparator="none" onClick={handleOnClick}>
-      {currentProvider === ""
-        ? "No Media Player Found"
-        : displayName(currentProvider)}
+      {label}
     </ButtonItem>
   );
 };

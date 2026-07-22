@@ -21,25 +21,34 @@ export const Content: FC = () => {
     const s = stateRef.current;
     try {
       const players = await listPlayers();
-      const busNames = players.map((p) => p.busName);
+      // Defend against unexpected backend/bridge shapes
+      const list = Array.isArray(players) ? players : [];
+      const busNames = list
+        .map((p) => (p && typeof p === "object" ? p.busName : ""))
+        .filter(Boolean) as string[];
       dispatch({ type: AppActions.SetProviders, value: busNames });
-      dispatch({ type: AppActions.SetProviderIdentities, value: players });
+      dispatch({ type: AppActions.SetProviderIdentities, value: list });
 
       if (busNames.length === 0) {
         dispatch({ type: AppActions.SetDefaultState });
         let detail =
-          "No MPRIS players found. Start Strawberry from Game Mode and wait until music is playing.";
+          "No MPRIS players found. Start Strawberry from Game Mode with a track playing.";
         try {
           const dbg = await debugInfo();
           const bits = [
-            dbg.note,
-            dbg.busAddress ? `bus=${dbg.busAddress}` : "",
-            dbg.dbusSend ? "" : "dbus-send missing",
+            `v2.0.1`,
+            dbg.note || "(no discovery note)",
+            dbg.busAddress ? `bus=${dbg.busAddress}` : "bus=(none)",
+            `uid=${dbg.uid}`,
+            dbg.dbusSend ? "dbus-send=ok" : "dbus-send=MISSING",
+            dbg.players?.length ? `raw=${dbg.players.join(",")}` : "",
             dbg.error,
           ].filter(Boolean);
-          if (bits.length) detail = bits.join(" · ");
-        } catch {
-          /* keep default */
+          detail = bits.join(" · ");
+        } catch (e) {
+          detail = `Backend debug_info failed: ${
+            e instanceof Error ? e.message : String(e)
+          }. Is the v2 plugin installed (not store 1.1.x)?`;
         }
         dispatch({ type: AppActions.SetLastError, value: detail });
         return;
@@ -94,7 +103,9 @@ export const Content: FC = () => {
     } catch (e) {
       dispatch({
         type: AppActions.SetLastError,
-        value: e instanceof Error ? e.message : String(e),
+        value: `listPlayers/getStatus failed: ${
+          e instanceof Error ? e.message : String(e)
+        }. If this persists, you may still be running store MusicControl 1.1.x — install the fork into ~/homebrew/plugins/MusicControl.`,
       });
     }
   };
@@ -126,17 +137,27 @@ export const Content: FC = () => {
       <PanelSectionRow>
         <MediaProviderButton currentProvider={state.currentServiceProvider} />
       </PanelSectionRow>
-      {state.lastError ? (
-        <PanelSectionRow>
-          <div style={{ fontSize: "0.8em", opacity: 0.75, marginTop: "4px" }}>
-            {state.lastError}
-          </div>
-        </PanelSectionRow>
-      ) : null}
       <PanelSectionRow>
-        <div style={{ fontSize: "0.75em", opacity: 0.6, marginTop: "8px" }}>
-          Start players from Game Mode so they share the session D-Bus. Works with
-          Strawberry, Spotify, Firefox, and other MPRIS apps.
+        <div
+          style={{
+            fontSize: "0.75em",
+            opacity: 0.85,
+            marginTop: "6px",
+            wordBreak: "break-word",
+            whiteSpace: "pre-wrap",
+          }}
+        >
+          {state.lastError
+            ? state.lastError
+            : state.currentServiceProvider
+              ? `Controlling: ${state.currentServiceProvider}`
+              : "Status: waiting for backend…"}
+        </div>
+      </PanelSectionRow>
+      <PanelSectionRow>
+        <div style={{ fontSize: "0.7em", opacity: 0.55, marginTop: "4px" }}>
+          Fork v2.0.1 — must be installed from GitHub JobDestroyer/MusicControlol
+          (not the old Decky store 1.1.x). Reload plugins after update.
         </div>
       </PanelSectionRow>
     </PanelSection>

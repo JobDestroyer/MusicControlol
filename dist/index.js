@@ -347,9 +347,12 @@ const MediaProviderButton = ({ currentProvider }) => {
                     value: provider,
                 });
             }, children: displayName(provider) }, provider)))) }), e.currentTarget ?? window);
-    return (SP_JSX.jsx(DFL.ButtonItem, { layout: "below", bottomSeparator: "none", onClick: handleOnClick, children: currentProvider === ""
-            ? "No Media Player Found"
-            : displayName(currentProvider) }));
+    const label = currentProvider === ""
+        ? state.providers.length === 0
+            ? "No Media Player Found (tap for info)"
+            : "Select media player…"
+        : displayName(currentProvider);
+    return (SP_JSX.jsx(DFL.ButtonItem, { layout: "below", bottomSeparator: "none", onClick: handleOnClick, children: label }));
 };
 
 const MusicControls = () => {
@@ -442,25 +445,31 @@ const Content = () => {
         const s = stateRef.current;
         try {
             const players = await listPlayers();
-            const busNames = players.map((p) => p.busName);
+            // Defend against unexpected backend/bridge shapes
+            const list = Array.isArray(players) ? players : [];
+            const busNames = list
+                .map((p) => (p && typeof p === "object" ? p.busName : ""))
+                .filter(Boolean);
             dispatch({ type: AppActions.SetProviders, value: busNames });
-            dispatch({ type: AppActions.SetProviderIdentities, value: players });
+            dispatch({ type: AppActions.SetProviderIdentities, value: list });
             if (busNames.length === 0) {
                 dispatch({ type: AppActions.SetDefaultState });
-                let detail = "No MPRIS players found. Start Strawberry from Game Mode and wait until music is playing.";
+                let detail = "No MPRIS players found. Start Strawberry from Game Mode with a track playing.";
                 try {
                     const dbg = await debugInfo();
                     const bits = [
-                        dbg.note,
-                        dbg.busAddress ? `bus=${dbg.busAddress}` : "",
-                        dbg.dbusSend ? "" : "dbus-send missing",
+                        `v2.0.1`,
+                        dbg.note || "(no discovery note)",
+                        dbg.busAddress ? `bus=${dbg.busAddress}` : "bus=(none)",
+                        `uid=${dbg.uid}`,
+                        dbg.dbusSend ? "dbus-send=ok" : "dbus-send=MISSING",
+                        dbg.players?.length ? `raw=${dbg.players.join(",")}` : "",
                         dbg.error,
                     ].filter(Boolean);
-                    if (bits.length)
-                        detail = bits.join(" · ");
+                    detail = bits.join(" · ");
                 }
-                catch {
-                    /* keep default */
+                catch (e) {
+                    detail = `Backend debug_info failed: ${e instanceof Error ? e.message : String(e)}. Is the v2 plugin installed (not store 1.1.x)?`;
                 }
                 dispatch({ type: AppActions.SetLastError, value: detail });
                 return;
@@ -510,7 +519,7 @@ const Content = () => {
         catch (e) {
             dispatch({
                 type: AppActions.SetLastError,
-                value: e instanceof Error ? e.message : String(e),
+                value: `listPlayers/getStatus failed: ${e instanceof Error ? e.message : String(e)}. If this persists, you may still be running store MusicControl 1.1.x — install the fork into ~/homebrew/plugins/MusicControl.`,
             });
         }
     };
@@ -525,7 +534,17 @@ const Content = () => {
         return () => clearInterval(id);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
-    return (SP_JSX.jsxs(DFL.PanelSection, { children: [SP_JSX.jsx("div", { className: DFL.staticClasses.PanelSectionTitle, children: "Currently Playing" }), SP_JSX.jsxs("div", { style: { display: "flex", marginBottom: "5px", alignItems: "center" }, children: [SP_JSX.jsx(AlbumArt, { albumArt: state.currentArtUrl }), SP_JSX.jsx(ArtistInfoPanel, { title: state.currentSong, artist: state.currentArtist })] }), SP_JSX.jsx(SongProgressSlider, {}), SP_JSX.jsx(MusicControls, {}), SP_JSX.jsx("div", { style: musicControlDividerStyle }), SP_JSX.jsx(VolumeControl, {}), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(MediaProviderButton, { currentProvider: state.currentServiceProvider }) }), state.lastError ? (SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: { fontSize: "0.8em", opacity: 0.75, marginTop: "4px" }, children: state.lastError }) })) : null, SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: { fontSize: "0.75em", opacity: 0.6, marginTop: "8px" }, children: "Start players from Game Mode so they share the session D-Bus. Works with Strawberry, Spotify, Firefox, and other MPRIS apps." }) })] }));
+    return (SP_JSX.jsxs(DFL.PanelSection, { children: [SP_JSX.jsx("div", { className: DFL.staticClasses.PanelSectionTitle, children: "Currently Playing" }), SP_JSX.jsxs("div", { style: { display: "flex", marginBottom: "5px", alignItems: "center" }, children: [SP_JSX.jsx(AlbumArt, { albumArt: state.currentArtUrl }), SP_JSX.jsx(ArtistInfoPanel, { title: state.currentSong, artist: state.currentArtist })] }), SP_JSX.jsx(SongProgressSlider, {}), SP_JSX.jsx(MusicControls, {}), SP_JSX.jsx("div", { style: musicControlDividerStyle }), SP_JSX.jsx(VolumeControl, {}), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx(MediaProviderButton, { currentProvider: state.currentServiceProvider }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: {
+                        fontSize: "0.75em",
+                        opacity: 0.85,
+                        marginTop: "6px",
+                        wordBreak: "break-word",
+                        whiteSpace: "pre-wrap",
+                    }, children: state.lastError
+                        ? state.lastError
+                        : state.currentServiceProvider
+                            ? `Controlling: ${state.currentServiceProvider}`
+                            : "Status: waiting for backend…" }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: { fontSize: "0.7em", opacity: 0.55, marginTop: "4px" }, children: "Fork v2.0.1 \u2014 must be installed from GitHub JobDestroyer/MusicControlol (not the old Decky store 1.1.x). Reload plugins after update." }) })] }));
 };
 
 var index = definePlugin(() => {
