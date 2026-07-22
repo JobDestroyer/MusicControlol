@@ -1,6 +1,12 @@
 import { PanelSection, PanelSectionRow, staticClasses } from "@decky/ui";
 import { useEffect, useRef, type FC } from "react";
-import { debugInfo, getStatus, listPlayers, setPlayer } from "../backend";
+import {
+  debugInfo,
+  getStatus,
+  listPlayers,
+  ping,
+  setPlayer,
+} from "../backend";
 import { AppActions, useStateContext } from "../context/context";
 import { musicControlDividerStyle } from "../styles/style";
 import { AlbumArt } from "./albumArt";
@@ -20,6 +26,26 @@ export const Content: FC = () => {
   const updateStatus = async () => {
     const s = stateRef.current;
     try {
+      // Fast liveness check — if this fails, backend isn't loaded
+      try {
+        const pong = await ping();
+        if (!pong?.ok) {
+          dispatch({
+            type: AppActions.SetLastError,
+            value: "Backend ping returned not-ok. Reload plugins.",
+          });
+          return;
+        }
+      } catch (e) {
+        dispatch({
+          type: AppActions.SetLastError,
+          value: `Backend not responding: ${
+            e instanceof Error ? e.message : String(e)
+          }. Reinstall from GitHub release v2.0.2 and Decky → Reload plugins. Check ~/homebrew/logs/MusicControl/`,
+        });
+        return;
+      }
+
       const players = await listPlayers();
       // Defend against unexpected backend/bridge shapes
       const list = Array.isArray(players) ? players : [];
@@ -36,7 +62,7 @@ export const Content: FC = () => {
         try {
           const dbg = await debugInfo();
           const bits = [
-            `v2.0.1`,
+            `v${dbg.version || "2.0.2"}`,
             dbg.note || "(no discovery note)",
             dbg.busAddress ? `bus=${dbg.busAddress}` : "bus=(none)",
             `uid=${dbg.uid}`,
@@ -48,7 +74,7 @@ export const Content: FC = () => {
         } catch (e) {
           detail = `Backend debug_info failed: ${
             e instanceof Error ? e.message : String(e)
-          }. Is the v2 plugin installed (not store 1.1.x)?`;
+          }`;
         }
         dispatch({ type: AppActions.SetLastError, value: detail });
         return;
@@ -156,8 +182,9 @@ export const Content: FC = () => {
       </PanelSectionRow>
       <PanelSectionRow>
         <div style={{ fontSize: "0.7em", opacity: 0.55, marginTop: "4px" }}>
-          Fork v2.0.1 — must be installed from GitHub JobDestroyer/MusicControlol
-          (not the old Decky store 1.1.x). Reload plugins after update.
+          MusicControl fork v2.0.2 (JobDestroyer/MusicControlol). If status stays
+          on “waiting for backend”, the Python side did not load — reinstall the
+          release zip and Reload plugins.
         </div>
       </PanelSectionRow>
     </PanelSection>

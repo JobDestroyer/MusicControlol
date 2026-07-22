@@ -92,17 +92,43 @@ function FaFastBackward (props) {
   return GenIcon({"attr":{"viewBox":"0 0 448 512"},"child":[{"tag":"path","attr":{"d":"M424.4 214.7L72.4 6.6C43.8-10.3 0 6.1 0 47.9V464c0 37.5 40.7 60.1 72.4 41.3l352-208c31.4-18.5 31.5-64.1 0-82.6z"},"child":[]}]})(props);
 }
 
-const listPlayers = callable("list_players");
-const setPlayer = callable("set_player");
+const listPlayersRaw = callable("list_players");
+const setPlayerRaw = callable("set_player");
 callable("get_player");
-const getStatus = callable("get_status");
-const playPause = callable("play_pause");
-const nextTrack = callable("next_track");
-const previousTrack = callable("previous_track");
-const setPosition = callable("set_position");
-const setVolume = callable("set_volume");
-const cacheAlbumArt = callable("cache_album_art");
-const debugInfo = callable("debug_info");
+const getStatusRaw = callable("get_status");
+const playPauseRaw = callable("play_pause");
+const nextTrackRaw = callable("next_track");
+const previousTrackRaw = callable("previous_track");
+const setPositionRaw = callable("set_position");
+const setVolumeRaw = callable("set_volume");
+const cacheAlbumArtRaw = callable("cache_album_art");
+const debugInfoRaw = callable("debug_info");
+const pingRaw = callable("ping");
+function withTimeout(p, ms, label) {
+    return new Promise((resolve, reject) => {
+        const t = window.setTimeout(() => {
+            reject(new Error(`${label} timed out after ${ms}ms (backend hung or not loaded)`));
+        }, ms);
+        p.then((v) => {
+            window.clearTimeout(t);
+            resolve(v);
+        }, (e) => {
+            window.clearTimeout(t);
+            reject(e);
+        });
+    });
+}
+const ping = () => withTimeout(pingRaw(), 3000, "ping");
+const listPlayers = () => withTimeout(listPlayersRaw(), 8000, "list_players");
+const setPlayer = (player) => withTimeout(setPlayerRaw(player), 3000, "set_player");
+const getStatus = () => withTimeout(getStatusRaw(), 8000, "get_status");
+const playPause = () => withTimeout(playPauseRaw(), 3000, "play_pause");
+const nextTrack = () => withTimeout(nextTrackRaw(), 3000, "next_track");
+const previousTrack = () => withTimeout(previousTrackRaw(), 3000, "previous_track");
+const setPosition = (position, trackId) => withTimeout(setPositionRaw(position, trackId), 3000, "set_position");
+const setVolume = (volume) => withTimeout(setVolumeRaw(volume), 3000, "set_volume");
+const cacheAlbumArt = (artUrl) => withTimeout(cacheAlbumArtRaw(artUrl), 5000, "cache_album_art");
+const debugInfo = () => withTimeout(debugInfoRaw(), 8000, "debug_info");
 
 var default_music = 'http://127.0.0.1:1337/plugins/MusicControl/assets/default_music-de70c8a5.png';
 
@@ -444,6 +470,24 @@ const Content = () => {
     const updateStatus = async () => {
         const s = stateRef.current;
         try {
+            // Fast liveness check — if this fails, backend isn't loaded
+            try {
+                const pong = await ping();
+                if (!pong?.ok) {
+                    dispatch({
+                        type: AppActions.SetLastError,
+                        value: "Backend ping returned not-ok. Reload plugins.",
+                    });
+                    return;
+                }
+            }
+            catch (e) {
+                dispatch({
+                    type: AppActions.SetLastError,
+                    value: `Backend not responding: ${e instanceof Error ? e.message : String(e)}. Reinstall from GitHub release v2.0.2 and Decky → Reload plugins. Check ~/homebrew/logs/MusicControl/`,
+                });
+                return;
+            }
             const players = await listPlayers();
             // Defend against unexpected backend/bridge shapes
             const list = Array.isArray(players) ? players : [];
@@ -458,7 +502,7 @@ const Content = () => {
                 try {
                     const dbg = await debugInfo();
                     const bits = [
-                        `v2.0.1`,
+                        `v${dbg.version || "2.0.2"}`,
                         dbg.note || "(no discovery note)",
                         dbg.busAddress ? `bus=${dbg.busAddress}` : "bus=(none)",
                         `uid=${dbg.uid}`,
@@ -469,7 +513,7 @@ const Content = () => {
                     detail = bits.join(" · ");
                 }
                 catch (e) {
-                    detail = `Backend debug_info failed: ${e instanceof Error ? e.message : String(e)}. Is the v2 plugin installed (not store 1.1.x)?`;
+                    detail = `Backend debug_info failed: ${e instanceof Error ? e.message : String(e)}`;
                 }
                 dispatch({ type: AppActions.SetLastError, value: detail });
                 return;
@@ -544,7 +588,7 @@ const Content = () => {
                         ? state.lastError
                         : state.currentServiceProvider
                             ? `Controlling: ${state.currentServiceProvider}`
-                            : "Status: waiting for backend…" }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: { fontSize: "0.7em", opacity: 0.55, marginTop: "4px" }, children: "Fork v2.0.1 \u2014 must be installed from GitHub JobDestroyer/MusicControlol (not the old Decky store 1.1.x). Reload plugins after update." }) })] }));
+                            : "Status: waiting for backend…" }) }), SP_JSX.jsx(DFL.PanelSectionRow, { children: SP_JSX.jsx("div", { style: { fontSize: "0.7em", opacity: 0.55, marginTop: "4px" }, children: "MusicControl fork v2.0.2 (JobDestroyer/MusicControlol). If status stays on \u201Cwaiting for backend\u201D, the Python side did not load \u2014 reinstall the release zip and Reload plugins." }) })] }));
 };
 
 var index = definePlugin(() => {
