@@ -1,10 +1,24 @@
 #!/usr/bin/env python3
-"""Unit tests for MPRIS parsing helpers."""
+"""
+tests/test_metadata.py
+======================
+
+Unit tests for MPRIS parsing helpers.
+
+These do **not** require a live D-Bus session or Decky — they feed canned
+dbus-send-shaped text (and typed-variant structures) into the pure parsers
+and check the output dicts.
+
+Run with::
+
+    python3 tests/test_metadata.py -v
+"""
 
 import os
 import sys
 import unittest
 
+# Allow `import mpris_parse` from the plugin root when run as a script
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from mpris_parse import parse_metadata, parse_player_get_all, parse_variant_string
@@ -12,6 +26,8 @@ from mpris_util import metadata_to_dict, unwrap_variant
 
 
 class TestUnwrapVariant(unittest.TestCase):
+    """Typed D-Bus variant unwrapping (for potential native D-Bus backends)."""
+
     def test_simple_variant(self):
         self.assertEqual(unwrap_variant(("s", "hello")), "hello")
 
@@ -23,6 +39,8 @@ class TestUnwrapVariant(unittest.TestCase):
 
 
 class TestMetadataToDict(unittest.TestCase):
+    """metadata_to_dict on jeepney-style nested tuples."""
+
     def test_multi_artist(self):
         raw = {
             "mpris:trackid": ("o", "/org/strawberry/Track/abc"),
@@ -37,7 +55,11 @@ class TestMetadataToDict(unittest.TestCase):
         self.assertEqual(out["title"], "Song Title With | Pipe")
 
 
-STRAWBERRY_META = r'''
+# ---------------------------------------------------------------------------
+# Canned dbus-send --print-reply text (simplified but representative)
+# ---------------------------------------------------------------------------
+
+STRAWBERRY_META = r"""
 method return time=1 sender=:1.99 -> destination=:1.100
    variant       array [
          dict entry(
@@ -64,9 +86,9 @@ method return time=1 sender=:1.99 -> destination=:1.100
                ]
          )
       ]
-'''
+"""
 
-GET_ALL_SAMPLE = r'''
+GET_ALL_SAMPLE = r"""
 method return
    array [
       dict entry(
@@ -109,10 +131,12 @@ method return
             ]
       )
    ]
-'''
+"""
 
 
 class TestParseMetadataText(unittest.TestCase):
+    """Text scrapers used on the live dbus-send path."""
+
     def test_strawberry_shaped(self):
         out = parse_metadata(STRAWBERRY_META)
         self.assertIn("Track/abcdef01", out.get("trackid", ""))

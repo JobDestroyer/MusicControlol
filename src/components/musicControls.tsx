@@ -1,3 +1,13 @@
+/**
+ * musicControls.tsx
+ * -----------------
+ * Previous / Play-Pause / Next transport buttons.
+ *
+ * Play-Pause is optimistic: we flip the icon immediately, then let the
+ * backend catch up. `hasChangedPlaybackState` blocks the 1 Hz poll from
+ * overwriting the icon for ~1 second so it doesn't flicker.
+ */
+
 import { DialogButton, Focusable } from "@decky/ui";
 import { useEffect, useRef, type FC } from "react";
 import { FaFastBackward, FaFastForward, FaPause, FaPlay } from "react-icons/fa";
@@ -19,10 +29,12 @@ export const MusicControls: FC = () => {
   const onPlayPause = () => {
     if (state.hasAvailableTrack) {
       if (timeoutRef.current != null) clearTimeout(timeoutRef.current);
+      // Optimistic UI flip
       dispatch({
         type: AppActions.SetPlayingStateByUser,
         value: state.currentTrackStatus === "Playing" ? "Paused" : "Playing",
       });
+      // After 1s, allow poll-driven status to take over again
       timeoutRef.current = setTimeout(() => {
         dispatch({ type: AppActions.SetHasChangedPlaybackState, value: false });
       }, 1000);

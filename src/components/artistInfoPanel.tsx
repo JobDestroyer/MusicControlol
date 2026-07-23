@@ -1,3 +1,11 @@
+/**
+ * artistInfoPanel.tsx
+ * -------------------
+ * Two-line text block next to the album art: track title + artist.
+ * Ellipsis styles come from musicControlFieldStyle so long names don't
+ * blow out the QAM panel width.
+ */
+
 import type { FC } from "react";
 import { musicControlFieldStyle } from "../styles/style";
 

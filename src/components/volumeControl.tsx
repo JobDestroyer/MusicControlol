@@ -1,3 +1,15 @@
+/**
+ * volumeControl.tsx
+ * -----------------
+ * Player volume slider (0–100% in the UI, 0.0–1.0 on the wire).
+ *
+ * Hidden when the active player doesn't expose a writable Volume property
+ * (`canModifyVolume` false — common for some browser MPRIS bridges).
+ *
+ * Same drag-lock pattern as the seek slider: `isSettingVolume` prevents
+ * poll from overwriting the thumb mid-drag.
+ */
+
 import { PanelSectionRow, SliderField, staticClasses } from "@decky/ui";
 import { useEffect, useRef, type FC } from "react";
 import { setVolume } from "../backend";
@@ -8,6 +20,7 @@ export const VolumeControl: FC = () => {
   const volumeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const onSliderChanged = (value: number) => {
+    // SliderField gives 0..100; MPRIS wants 0.0..1.0
     const normalized = value / 100.0;
     void setVolume(normalized);
     dispatch({ type: AppActions.AdjustVolumeByUser, value: normalized });
